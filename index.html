@@ -692,6 +692,8 @@ function updateUndoUI() {
 // SYMBOL SHORTCUTS
 // ═══════════════════════════════════════════════════════════════
 function normalizeFormula(s) {
+  if (s == null) return "";
+  s = String(s);
   return s
     .replace(/<->/g, '↔').replace(/<>/g, '↔')
     .replace(/->/g, '→').replace(/=>/g, '→')
@@ -928,6 +930,7 @@ function parse(f) {
 
 
 function formulasEqual(a, b) {
+  if (a == null || b == null) return false;
   return normalizeFormula(a).replace(/\s+/g,' ').trim() === normalizeFormula(b).replace(/\s+/g,' ').trim();
 }
 
@@ -995,7 +998,7 @@ function accessibleLines(proof, fromIdx) {
 
 function getFormulaAt(proof, idx) {
   if (idx < 0 || idx >= proof.length) return null;
-  return normalizeFormula(proof[idx].formula);
+  return normalizeFormula(proof[idx].formula ?? "");
 }
 
 // Returns a subproof range [assumptionIdx, lastLineIdx] if lines[0]..lines[1] form a valid subproof
@@ -1150,7 +1153,7 @@ function checkLine(proof, idx) {
       if (p?.type !== 'neg') return { ok: false, msg: 'Formula must be a negation' };
       const sp2 = getSubproofRange(proof, lines[0], lines[1]);
       if (!sp2) return { ok: false, msg: `Lines ${lines[0]+1}–${lines[1]+1} are not a valid subproof` };
-      if (!formulasEqual(sp2.assumption, p.sub)) return { ok: false, msg: `Subproof assumes ${sp2.assumption}, not ${p.sub}` };
+      if (!formulasEqual(sp2.assumption, unparse(p.sub))) return { ok: false, msg: `Subproof assumes ${sp2.assumption}, not ${unparse(p.sub)}` };
       if (sp2.conclusion !== '⊥') return { ok: false, msg: `Subproof must conclude ⊥, not ${sp2.conclusion}` };
       return { ok: true };
     }
@@ -1159,9 +1162,9 @@ function checkLine(proof, idx) {
       if (lines.length < 1) return { ok: false, msg: '¬E needs 1 line reference' };
       const neg = P(lines[0]);
       if (neg?.type !== 'neg') return { ok: false, msg: `Line ${lines[0]+1} is not a negation` };
-      const innerneg = parse(neg.sub);
+      const innerneg = parse(unparse(neg.sub));
       if (innerneg?.type !== 'neg') return { ok: false, msg: `Line ${lines[0]+1} is not a double negation ¬¬φ` };
-      if (!formulasEqual(innerneg.sub, f)) return { ok: false, msg: `Inner formula ${innerneg.sub} ≠ ${f}` };
+      if (!formulasEqual(unparse(innerneg.sub), f)) return { ok: false, msg: `Inner formula ${unparse(innerneg.sub)} ≠ ${f}` };
       return { ok: true };
     }
 
@@ -1174,8 +1177,9 @@ function checkLine(proof, idx) {
       const p0 = P(lines[0]);
       const p1 = P(lines[1]);
       // Check: one line is ¬φ and the other is φ
-      if (p0?.type === 'neg' && formulasEqual(p0.sub, l1)) return { ok: true };
-      if (p1?.type === 'neg' && formulasEqual(p1.sub, l0)) return { ok: true };
+      // .sub is a parsed node, so unparse it back to a string before comparing
+      if (p0?.type === 'neg' && formulasEqual(unparse(p0.sub), l1)) return { ok: true };
+      if (p1?.type === 'neg' && formulasEqual(unparse(p1.sub), l0)) return { ok: true };
       return { ok: false, msg: `⊥I: line ${lines[0]+1} ("${l0}") and line ${lines[1]+1} ("${l1}") are not a contradictory pair φ and ¬φ` };
     }
 
@@ -1193,7 +1197,7 @@ function checkLine(proof, idx) {
       const assumP = parse(sp3.assumption);
       if (assumP?.type !== 'neg') return { ok: false, msg: `Subproof assumption must be a negation ¬φ` };
       if (sp3.conclusion !== '⊥') return { ok: false, msg: `Subproof must conclude ⊥` };
-      if (!formulasEqual(assumP.sub, f)) return { ok: false, msg: `¬φ assumption has φ = ${assumP.sub}, not ${f}` };
+      if (!formulasEqual(unparse(assumP.sub), f)) return { ok: false, msg: `¬φ assumption has φ = ${unparse(assumP.sub)}, not ${f}` };
       return { ok: true };
     }
 
