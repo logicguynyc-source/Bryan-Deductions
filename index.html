@@ -954,7 +954,7 @@ function parseJust(s) {
   }
 
   // Extract rule name
-  const ruleMatch = s.match(/^([∀∃∧∨→↔¬\w]+)/);
+  const ruleMatch = s.match(/^([∀∃∧∨→↔¬⊥\w]+)/);
   if (!ruleMatch) return null;
   const rule = ruleMatch[1].trim();
   const rest = s.slice(rule.length).trim();
