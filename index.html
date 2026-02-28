@@ -610,10 +610,12 @@ header span {
       <div class="instructions">
         <p style="margin-bottom:8px;"><strong>1. Set up</strong> — Enter comma-separated premises and a conclusion, then click <em>Create Proof</em>.</p>
         <p style="margin-bottom:8px;"><strong>2. Type formulas</strong> — Each row has a formula cell (left) and a justification cell (right). Click either to edit.</p>
-        <p style="margin-bottom:8px;"><strong>3. Justifications</strong> — Type the rule abbreviation followed by line numbers, e.g. <code>∧I 1,2</code> or <code>→E 3,4</code>. Premises are labelled automatically.</p>
-        <p style="margin-bottom:8px;"><strong>4. Subproofs</strong> — Use the <strong>+sub</strong> button to open a subproof (needed for →I, ¬I, ∨E). The first line of a subproof is always an assumption.</p>
-        <p style="margin-bottom:8px;"><strong>5. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
-        <p><strong>Symbols</strong> — Use the symbol bar above, or type: <code>-</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-></code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
+        <p style="margin-bottom:8px;"><strong>3. Justifications</strong> — Type the rule abbreviation and line numbers, e.g. <code>∧I 1,2</code> or <code>→E 3,4</code>. Premises are labelled automatically.</p>
+        <p style="margin-bottom:8px;"><strong>4. Subproofs</strong> — Use <strong>+sub</strong> to open a subproof (needed for →I, ¬I, ∨E, ∀I, ∃E). The first line is always an assumption.</p>
+        <p style="margin-bottom:8px;"><strong>5. FOL quantifiers</strong> — Write <code>∀x Fx</code> or <code>∃x Gxy</code>. For <code>∀E</code> and <code>∃I</code> specify the substitution: <code>∀E 1 [x/a]</code> (replace x with a). For <code>∀I</code> write <code>∀I 3-5 [c/x]</code> (c is the arbitrary constant, x the variable). For <code>∃E</code> write <code>∃E 1 2-4</code>.</p>
+        <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
+        <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
+        <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — <code>Ax</code> for ∀x, <code>Ex</code> for ∃x. Predicates: uppercase letter (not A/E alone) + lowercase terms, e.g. <code>Fa</code>, <code>Gab</code>. Identity: <code>a=b</code>.</p>
       </div>
     </div>
 
@@ -696,7 +698,11 @@ function normalizeFormula(s) {
     .replace(/\/\\/g, '∧').replace(/\^/g, '∧').replace(/&/g, '∧')
     .replace(/\\\//g, '∨')
     .replace(/~|-(?!>)/g, '¬')
-    .replace(/_\|_/g, '⊥').replace(/XX|#/g, '⊥')
+    .replace(/_\|_/g, '⊥').replace(/\bXX\b|#/g, '⊥')
+    // Quantifier shorthands: Ax → ∀x, Ex → ∃x
+    // Only when A/E is followed by exactly one lowercase letter then non-lowercase (space, end, paren)
+    .replace(/(?<![A-Za-z])A([a-z])(?![a-z])/g, '∀$1')
+    .replace(/(?<![A-Za-z])E([a-z])(?![a-z])/g, '∃$1')
     .trim();
 }
 
@@ -704,18 +710,25 @@ function normalizeFormula(s) {
 // RULES REFERENCE
 // ═══════════════════════════════════════════════════════════════
 const RULES = [
-  { key: '∧I',  name: 'Conjunction Intro',      abbr: '∧I',  form: 'φ  (m),  ψ  (n)  →  φ∧ψ',         desc: 'From φ on line m and ψ on line n, derive φ ∧ ψ.',                         lines: 2 },
-  { key: '∧E',  name: 'Conjunction Elim',       abbr: '∧E',  form: 'φ∧ψ  (m)  →  φ  or  ψ',           desc: 'From φ ∧ ψ on line m, derive either φ or ψ.',                            lines: 1 },
-  { key: '∨I',  name: 'Disjunction Intro',      abbr: '∨I',  form: 'φ  (m)  →  φ∨ψ  or  ψ∨φ',         desc: 'From φ on line m, derive φ ∨ ψ (for any ψ).',                           lines: 1 },
-  { key: '∨E',  name: 'Disjunction Elim',       abbr: '∨E',  form: 'φ∨ψ (m), [φ⊢χ] (i–j), [ψ⊢χ] (k–l) → χ', desc: 'From φ∨ψ and two subproofs each deriving χ, derive χ.',          lines: 3 },
-  { key: '→I',  name: 'Conditional Intro',      abbr: '→I',  form: '[φ⊢ψ] (m–n)  →  φ→ψ',             desc: 'From a subproof assuming φ (line m) and deriving ψ (line n), derive φ→ψ.', lines: 2 },
-  { key: '→E',  name: 'Conditional Elim',       abbr: '→E',  form: 'φ→ψ (m),  φ (n)  →  ψ',           desc: 'Modus Ponens. From φ→ψ and φ, derive ψ.',                                lines: 2 },
-  { key: '↔I',  name: 'Biconditional Intro',    abbr: '↔I',  form: 'φ→ψ (m), ψ→φ (n) → φ↔ψ',          desc: 'From φ→ψ and ψ→φ, derive φ↔ψ.',                                         lines: 2 },
-  { key: '↔E',  name: 'Biconditional Elim',     abbr: '↔E',  form: 'φ↔ψ (m), φ or ψ (n) → ψ or φ',   desc: 'From φ↔ψ and either side, derive the other side.',                       lines: 2 },
-  { key: '¬I',  name: 'Negation Intro',         abbr: '¬I',  form: '[φ⊢⊥] (m–n)  →  ¬φ',              desc: 'From a subproof assuming φ (line m) and deriving ⊥ (line n), derive ¬φ.', lines: 2 },
-  { key: '¬E',  name: 'Negation Elim',          abbr: '¬E',  form: '¬¬φ  (m)  →  φ',                  desc: 'From ¬¬φ, derive φ. (Double negation elimination)',                       lines: 1 },
-  { key: 'X',   name: 'Explosion (Ex Falso)',   abbr: 'X',   form: '⊥  (m)  →  φ',                    desc: 'From ⊥ (contradiction) on line m, derive anything.',                      lines: 1 },
-  { key: 'IP',  name: 'Indirect Proof',         abbr: 'IP',  form: '[¬φ⊢⊥] (m–n)  →  φ',              desc: 'From a subproof assuming ¬φ and deriving ⊥, derive φ.',                   lines: 2 },
+  // ── Truth-Functional Logic ──
+  { key: '∧I',  name: 'Conjunction Intro',      abbr: '∧I',  form: 'φ (m), ψ (n) → φ∧ψ',                     desc: 'From φ on line m and ψ on line n, derive φ ∧ ψ.',                           lines: 2 },
+  { key: '∧E',  name: 'Conjunction Elim',       abbr: '∧E',  form: 'φ∧ψ (m) → φ or ψ',                       desc: 'From φ ∧ ψ on line m, derive either φ or ψ.',                              lines: 1 },
+  { key: '∨I',  name: 'Disjunction Intro',      abbr: '∨I',  form: 'φ (m) → φ∨ψ or ψ∨φ',                     desc: 'From φ on line m, derive φ ∨ ψ (for any ψ).',                             lines: 1 },
+  { key: '∨E',  name: 'Disjunction Elim',       abbr: '∨E',  form: 'φ∨ψ (m), [φ⊢χ] (i–j), [ψ⊢χ] (k–l) → χ', desc: 'From φ∨ψ and two subproofs each deriving χ, derive χ.',                    lines: 3 },
+  { key: '→I',  name: 'Conditional Intro',      abbr: '→I',  form: '[φ⊢ψ] (m–n) → φ→ψ',                      desc: 'From a subproof assuming φ (line m) and deriving ψ (line n), derive φ→ψ.', lines: 2 },
+  { key: '→E',  name: 'Conditional Elim',       abbr: '→E',  form: 'φ→ψ (m), φ (n) → ψ',                     desc: 'Modus Ponens. From φ→ψ and φ, derive ψ.',                                  lines: 2 },
+  { key: '↔I',  name: 'Biconditional Intro',    abbr: '↔I',  form: 'φ→ψ (m), ψ→φ (n) → φ↔ψ',                 desc: 'From φ→ψ and ψ→φ, derive φ↔ψ.',                                           lines: 2 },
+  { key: '↔E',  name: 'Biconditional Elim',     abbr: '↔E',  form: 'φ↔ψ (m), φ or ψ (n) → ψ or φ',           desc: 'From φ↔ψ and either side, derive the other side.',                         lines: 2 },
+  { key: '¬I',  name: 'Negation Intro',         abbr: '¬I',  form: '[φ⊢⊥] (m–n) → ¬φ',                       desc: 'From a subproof assuming φ (line m) and deriving ⊥ (line n), derive ¬φ.',  lines: 2 },
+  { key: '¬E',  name: 'Negation Elim',          abbr: '¬E',  form: '¬¬φ (m) → φ',                             desc: 'From ¬¬φ, derive φ. (Double negation elimination)',                         lines: 1 },
+  { key: '⊥I',  name: 'Contradiction Intro',   abbr: '⊥I',  form: 'φ (m), ¬φ (n) → ⊥',                      desc: 'From φ on line m and ¬φ on line n (or vice versa), derive ⊥. This is how you introduce a contradiction into your proof.',  lines: 2 },
+  { key: 'X',   name: 'Explosion (Ex Falso)',   abbr: 'X',   form: '⊥ (m) → φ',                               desc: 'From ⊥ (contradiction) on line m, derive anything.',                       lines: 1 },
+  { key: 'IP',  name: 'Indirect Proof',         abbr: 'IP',  form: '[¬φ⊢⊥] (m–n) → φ',                       desc: 'From a subproof assuming ¬φ and deriving ⊥, derive φ.',                    lines: 2 },
+  // ── First-Order Logic ──
+  { key: '∀I',  name: 'Universal Intro',        abbr: '∀I',  form: '[c arbitrary⊢φc] (m–n) → ∀x φx',          desc: 'From a subproof assuming an arbitrary constant c (not free in any undischarged assumption) and deriving φ[c], derive ∀x φ[x]. Write as: ∀I m–n [c/x].', lines: 2, isFOL: true },
+  { key: '∀E',  name: 'Universal Elim',         abbr: '∀E',  form: '∀x φx (m) → φ[t/x]',                      desc: 'From ∀x φ on line m, derive φ[t/x] for any term t. Write as: ∀E m [x/t].', lines: 1, isFOL: true },
+  { key: '∃I',  name: 'Existential Intro',      abbr: '∃I',  form: 'φ[t/x] (m) → ∃x φx',                      desc: 'From φ[t] on line m, derive ∃x φ[x]. Write as: ∃I m [t/x].', lines: 1, isFOL: true },
+  { key: '∃E',  name: 'Existential Elim',       abbr: '∃E',  form: '∃x φx (m), [φc⊢ψ] (i–j) → ψ',            desc: 'From ∃x φ and a subproof from φ[c] to ψ (c not free in ψ or any undischarged assumption), derive ψ. Write as: ∃E m i–j.', lines: 3, isFOL: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -766,33 +779,153 @@ function getTopOp(f) {
   return r ? r.op : null;
 }
 
-// Parse a formula: return its "type" and parts, or null if unparseable
+// ═══════════════════════════════════════════════════════════════
+// FOL HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+// Variables and terms: lowercase a–z (x,y,z allowed; spec says a–w but we extend for usability)
+const TERM_RE = /^[a-z]$/;
+
+// Parse a quantified prefix: ∀x or ∃x
+function parseQuantPrefix(s) {
+  s = s.trim();
+  const m = s.match(/^([∀∃])([a-z])\s*([\s\S]*)/);
+  if (!m) return null;
+  return { quant: m[1], variable: m[2], rest: m[3].trim() };
+}
+
+// Substitute all FREE occurrences of variable `v` with term `t` in a parsed node
+function substNode(node, v, t) {
+  if (!node) return node;
+  switch (node.type) {
+    case 'bot': return node;
+    case 'atom': {
+      // Atom like 'Fab': predicate is uppercase prefix, terms are lowercase suffix
+      const am = node.formula.match(/^([A-Z]+)([a-z]*)$/);
+      if (am) return { ...node, formula: am[1] + am[2].replace(new RegExp(v, 'g'), t) };
+      return node;
+    }
+    case 'identity': {
+      // a=b: replace both sides
+      return { ...node, formula: node.formula.replace(new RegExp(v, 'g'), t),
+               left: node.left === v ? t : node.left,
+               right: node.right === v ? t : node.right };
+    }
+    case 'neg': return { type: 'neg', sub: substNode(node.sub, v, t) };
+    case '∧': case '∨': case '→': case '↔':
+      return { type: node.type, left: substNode(node.left, v, t), right: substNode(node.right, v, t) };
+    case '∀': case '∃':
+      if (node.variable === v) return node;  // v is bound here — stop
+      return { type: node.type, variable: node.variable, scope: substNode(node.scope, v, t) };
+    default: return node;
+  }
+}
+
+function needsParens(node) {
+  if (!node) return false;
+  return ['∧','∨','→','↔'].includes(node.type);
+}
+
+function unparse(node) {
+  if (!node) return '?';
+  switch (node.type) {
+    case 'atom': case 'identity': return node.formula;
+    case 'bot': return '⊥';
+    case 'neg': {
+      const s = unparse(node.sub);
+      return '¬' + (needsParens(node.sub) ? `(${s})` : s);
+    }
+    case '∧': case '∨': case '→': case '↔': {
+      const l = unparse(node.left), r = unparse(node.right);
+      const lp = needsParens(node.left) ? `(${l})` : l;
+      const rp = needsParens(node.right) ? `(${r})` : r;
+      return `${lp} ${node.type} ${rp}`;
+    }
+    case '∀': case '∃': {
+      const s = unparse(node.scope);
+      // Wrap scope in parens if it's a binary connective (otherwise ∀x Fx → Gx is ambiguous)
+      const sp = needsParens(node.scope) ? `(${s})` : s;
+      return `${node.type}${node.variable} ${sp}`;
+    }
+    default: return '?';
+  }
+}
+
+function substitute(formula, variable, term) {
+  const p = parseFOL(formula);
+  if (!p) return formula;
+  return unparse(substNode(p, variable, term));
+}
+
+// Check if variable v occurs free in a parsed node
+function isFreeInNode(v, node) {
+  if (!node) return false;
+  switch (node.type) {
+    case 'bot': return false;
+    case 'atom': {
+      // In atom 'Fab', terms are lowercase chars after predicate
+      const am = node.formula.match(/^[A-Z]+([a-z]*)$/);
+      return am ? am[1].includes(v) : false;
+    }
+    case 'identity': return node.left === v || node.right === v;
+    case 'neg': return isFreeInNode(v, node.sub);
+    case '∧': case '∨': case '→': case '↔':
+      return isFreeInNode(v, node.left) || isFreeInNode(v, node.right);
+    case '∀': case '∃':
+      if (node.variable === v) return false;  // bound
+      return isFreeInNode(v, node.scope);
+    default: return false;
+  }
+}
+
+function isFreeIn(v, formula) {
+  const node = parseFOL(normalizeFormula(formula));
+  if (!node) return false;
+  return isFreeInNode(v, node);
+}
+
+// Full FOL parser: handles ∀/∃, connectives, atoms, identity, TFL
+function parseFOL(f) {
+  f = f.trim();
+  if (!f) return null;
+
+  // Strip matching outer parens
+  if (isWrappedInParens(f)) return parseFOL(f.slice(1, -1).trim());
+
+  // ⊥
+  if (f === '⊥') return { type: 'bot', formula: '⊥' };
+
+  // Quantifier: ∀x φ or ∃x φ (must come before negation check)
+  const qp = parseQuantPrefix(f);
+  if (qp) return { type: qp.quant, variable: qp.variable, scope: parseFOL(qp.rest) };
+
+  // Negation: ¬φ
+  if (f.startsWith('¬')) return { type: 'neg', sub: parseFOL(f.slice(1).trim()) };
+
+  // Binary connectives (scanned right-to-left, lowest precedence first: ↔ → ∨ ∧)
+  const bin = splitOn(f, ['↔','→','∨','∧']);
+  if (bin) return { type: bin.op, left: parseFOL(bin.left), right: parseFOL(bin.right) };
+
+  // Identity: a = b  (two lowercase terms with =)
+  const idm = f.match(/^([a-z])\s*=\s*([a-z])$/);
+  if (idm) return { type: 'identity', formula: f.replace(/\s/g, ''), left: idm[1], right: idm[2] };
+
+  // FOL atom: uppercase predicate letter(s) + zero or more lowercase term letters
+  // Predicate must be uppercase; terms are lowercase a-z
+  // Per spec: predicates are single uppercase other than A/E alone (those are quantifier shorthands)
+  if (/^[A-Z][a-z]*$/.test(f)) return { type: 'atom', formula: f };
+
+  // Opaque fallback
+  return { type: 'atom', formula: f };
+}
+
+// Parse a formula (entry point): return parsed node or null
 function parse(f) {
   f = normalizeFormula(f).trim();
   if (!f) return null;
-  const inner = isWrappedInParens(f) ? f.slice(1,-1).trim() : f;
-
-  // ⊥
-  if (inner === '⊥') return { type: 'bot', formula: '⊥' };
-
-  // Negation: starts with ¬
-  if (inner.startsWith('¬')) {
-    const sub = inner.slice(1).trim();
-    return { type: 'neg', sub };
-  }
-
-  // Binary ops (right to left)
-  const r = splitOn(inner, ['↔','→','∨','∧']);
-  if (r) return { type: r.op, left: r.left, right: r.right };
-
-  // Atom: single uppercase letter optionally followed by lowercase sequence (FOL)
-  if (/^[A-Z][a-z]*[0-9]*$/.test(inner) || /^[a-z]=[a-z]$/.test(inner)) {
-    return { type: 'atom', formula: inner };
-  }
-
-  // Anything else: treat as opaque atom
-  return { type: 'atom', formula: inner };
+  return parseFOL(f);
 }
+
 
 function formulasEqual(a, b) {
   return normalizeFormula(a).replace(/\s+/g,' ').trim() === normalizeFormula(b).replace(/\s+/g,' ').trim();
@@ -802,32 +935,37 @@ function formulasEqual(a, b) {
 // PROOF CHECKER
 // ═══════════════════════════════════════════════════════════════
 
-// Parse justification string, e.g. "→E 1,2" or "→I 3-5" or "→I,[3-5]" or "Pr" or "As"
+// Parse justification string.
+// Handles: "→E 1,2" | "∀E 1 [x/a]" | "∃I 2 [a/x]" | "→I,[3-5]" | "Pr" | "As"
 function parseJust(s) {
   s = s.trim();
   if (!s) return null;
-  // Known no-line rules
-  if (/^(Pr|premise|As|assumption)$/i.test(s)) return { rule: s.toUpperCase(), lines: [] };
+  if (/^(Pr|premise|As|assumption)$/i.test(s)) return { rule: s.toUpperCase(), lines: [], subst: null };
 
   // Normalise: strip a leading comma between rule name and line refs
-  // e.g. "→I,[3-5]" → "→I [3-5]",  "→E,1,2" → "→E 1,2"
   s = s.replace(/^([^\d\[\s,]+),/, '$1 ');
 
-  // Extract rule name: everything up to first space, digit, '[', or end
-  const ruleMatch = s.match(/^([∧∨→↔¬\w]+)/);
+  // Extract optional substitution spec [x/t] or [t/x] at end
+  let subst = null;
+  const substMatch = s.match(/\[([a-w])\/([a-w])\]/);
+  if (substMatch) {
+    subst = { from: substMatch[1], to: substMatch[2] };
+    s = s.replace(substMatch[0], '').trim();
+  }
+
+  // Extract rule name
+  const ruleMatch = s.match(/^([∀∃∧∨→↔¬\w]+)/);
   if (!ruleMatch) return null;
   const rule = ruleMatch[1].trim();
   const rest = s.slice(rule.length).trim();
 
-  // Collect line numbers from the remainder.
-  // Handles: "1,2"  "3-5"  "[3-5]"  "1, 2"  "3–5"  and combinations.
+  // Collect line numbers (handles ranges like 3-5 and [3-5])
   const lines = [];
   const cleaned = rest.replace(/[\[\]]/g, ' ').replace(/[–—]/g, '-');
   const tokens = cleaned.split(/[\s,]+/).filter(Boolean);
   for (const tok of tokens) {
     const rangeMatch = tok.match(/^(\d+)-(\d+)$/);
     if (rangeMatch) {
-      // A range like "3-5" → two line references: start and end
       lines.push(parseInt(rangeMatch[1]) - 1);
       lines.push(parseInt(rangeMatch[2]) - 1);
     } else {
@@ -836,7 +974,7 @@ function parseJust(s) {
     }
   }
 
-  return { rule, lines };
+  return { rule, lines, subst };
 }
 
 // Given a line index, get all "accessible" lines from that position
@@ -1027,6 +1165,20 @@ function checkLine(proof, idx) {
       return { ok: true };
     }
 
+    case '⊥I': case 'BOTI': case 'CONTRA': case 'NOT-E': {
+      // ⊥I: from φ (m) and ¬φ (n), derive ⊥
+      if (lines.length < 2) return { ok: false, msg: '⊥I needs 2 line references: φ and ¬φ' };
+      if (f !== '⊥') return { ok: false, msg: '⊥I can only justify ⊥ (contradiction)' };
+      const l0 = normalizeFormula(L(lines[0]) || '');
+      const l1 = normalizeFormula(L(lines[1]) || '');
+      const p0 = P(lines[0]);
+      const p1 = P(lines[1]);
+      // Check: one line is ¬φ and the other is φ
+      if (p0?.type === 'neg' && formulasEqual(p0.sub, l1)) return { ok: true };
+      if (p1?.type === 'neg' && formulasEqual(p1.sub, l0)) return { ok: true };
+      return { ok: false, msg: `⊥I: line ${lines[0]+1} ("${l0}") and line ${lines[1]+1} ("${l1}") are not a contradictory pair φ and ¬φ` };
+    }
+
     case 'X': case 'EFQ': case 'FALSO': {
       if (lines.length < 1) return { ok: false, msg: 'X needs 1 line reference' };
       if (normalizeFormula(L(lines[0]) || '') !== '⊥') return { ok: false, msg: `Line ${lines[0]+1} must be ⊥` };
@@ -1048,6 +1200,151 @@ function checkLine(proof, idx) {
     case 'R': case 'REIT': {
       if (lines.length < 1) return { ok: false, msg: 'R (Reiteration) needs 1 line reference' };
       if (!formulasEqual(f, normalizeFormula(L(lines[0]) || ''))) return { ok: false, msg: `Formula doesn't match line ${lines[0]+1}` };
+      return { ok: true };
+    }
+
+    // ══ UNIVERSAL QUANTIFIER ══
+
+    case '∀I': case 'UI': case 'FORALL-I': {
+      // ∀I m–n [c/x]  — subproof from line m (assumption of arbitrary c) to line n (φ[c])
+      // Conclusion must be ∀x φ[x]
+      if (lines.length < 2) return { ok: false, msg: '∀I needs a subproof range, e.g. ∀I 3-5 [c/x]' };
+      if (p?.type !== '∀') return { ok: false, msg: 'Formula must be ∀x φ for ∀I' };
+
+      const sp = getSubproofRange(proof, lines[0], lines[1]);
+      if (!sp) return { ok: false, msg: `Lines ${lines[0]+1}–${lines[1]+1} are not a valid subproof` };
+
+      const boundVar = p.variable;      // x  (the variable being universalised)
+      // The subproof assumption should introduce the arbitrary constant c
+      const arb = sp.assumption.trim(); // This is "φ[c]" for the arbitrary c
+      // The subproof conclusion should be φ[c]
+      const concl = sp.conclusion.trim();
+
+      // Determine c: from subst spec if given, or try to infer from assumption
+      let c = j.subst ? j.subst.from : null;
+      if (!c) {
+        // Try to infer: find a term in assumption that maps to x in conclusion ∀x φ
+        // Heuristic: if assumption is a single atom-like formula, c is its term
+        // For robustness, require explicit [c/x]
+        return { ok: false, msg: '∀I: please specify the arbitrary constant, e.g. ∀I 3-5 [c/x]' };
+      }
+      const x = j.subst ? j.subst.to : boundVar;
+
+      // Check: substituting x for c in the conclusion's scope should give concl
+      const scopeWithC = substitute(unparse(p.scope), x, c);
+      if (!formulasEqual(scopeWithC, concl)) {
+        return { ok: false, msg: `∀I: conclusion scope with ${c} substituted for ${x} should be "${concl}" but got "${scopeWithC}"` };
+      }
+
+      // Check: c must not appear free in any undischarged assumption at current depth
+      for (let i = 0; i < idx; i++) {
+        const r = proof[i];
+        // Undischarged = same or lesser depth, before current line, and not inside a closed subproof
+        if (r.depth > proof[idx].depth) continue;
+        if ((r.type === 'premise' || r.type === 'assumption') && isFreeIn(c, r.formula)) {
+          return { ok: false, msg: `∀I: arbitrary constant '${c}' appears free in line ${i+1} ("${r.formula}"), which is an undischarged assumption` };
+        }
+      }
+
+      return { ok: true };
+    }
+
+    case '∀E': case 'UE': case 'FORALL-E': {
+      // ∀E m [x/t] — from ∀x φ, derive φ[t/x]
+      if (lines.length < 1) return { ok: false, msg: '∀E needs 1 line reference, e.g. ∀E 1 [x/a]' };
+      const univ = P(lines[0]);
+      if (univ?.type !== '∀') return { ok: false, msg: `Line ${lines[0]+1} must be a universal ∀x φ` };
+
+      const x2 = univ.variable;
+      let t = j.subst ? j.subst.to : null;
+      if (!t) {
+        // Try to infer t by comparing ∀x φ with conclusion
+        // Find what term was substituted: scope of univ with x replaced by each possible term
+        const possibleTerms = 'abcdefghijklmnopqrstuvw'.split('');
+        for (const cand of possibleTerms) {
+          const candidate = substitute(unparse(univ.scope), x2, cand);
+          if (formulasEqual(candidate, f)) { t = cand; break; }
+        }
+        if (!t) return { ok: false, msg: `∀E: cannot infer substitution; specify e.g. ∀E ${lines[0]+1} [${x2}/a]` };
+      }
+
+      const derived = substitute(unparse(univ.scope), x2, t);
+      if (!formulasEqual(derived, f)) {
+        return { ok: false, msg: `∀E: substituting ${x2}→${t} in ∀${x2}φ gives "${derived}", not "${f}"` };
+      }
+      return { ok: true };
+    }
+
+    case '∃I': case 'EI': case 'EXISTS-I': {
+      // ∃I m [t/x] — from φ[t], derive ∃x φ[x]
+      if (lines.length < 1) return { ok: false, msg: '∃I needs 1 line reference, e.g. ∃I 1 [a/x]' };
+      if (p?.type !== '∃') return { ok: false, msg: 'Formula must be ∃x φ for ∃I' };
+
+      const x3 = p.variable;
+      const sourceLine = normalizeFormula(L(lines[0]) || '');
+
+      let t2 = j.subst ? j.subst.from : null;
+      if (!t2) {
+        // Try to infer t from source line
+        const possibleTerms = 'abcdefghijklmnopqrstuvw'.split('');
+        for (const cand of possibleTerms) {
+          const candidate = substitute(unparse(p.scope), x3, cand);
+          if (formulasEqual(candidate, sourceLine)) { t2 = cand; break; }
+        }
+        if (!t2) return { ok: false, msg: `∃I: cannot infer substitution; specify e.g. ∃I ${lines[0]+1} [a/${x3}]` };
+      }
+
+      const derived2 = substitute(unparse(p.scope), x3, t2);
+      if (!formulasEqual(derived2, sourceLine)) {
+        return { ok: false, msg: `∃I: ∃${x3}φ with ${x3}→${t2} gives "${derived2}", but line ${lines[0]+1} is "${sourceLine}"` };
+      }
+      return { ok: true };
+    }
+
+    case '∃E': case 'EE': case 'EXISTS-E': {
+      // ∃E m i–j  — from ∃x φ (m) and subproof φ[c]⊢ψ (i–j), derive ψ
+      // lines[0] = existential, lines[1] = start of subproof, lines[2] = end of subproof
+      if (lines.length < 3) return { ok: false, msg: '∃E needs 3 line refs: ∃xφ line, subproof start, subproof end' };
+
+      const exist = P(lines[0]);
+      if (exist?.type !== '∃') return { ok: false, msg: `Line ${lines[0]+1} must be an existential ∃x φ` };
+
+      const sp4 = getSubproofRange(proof, lines[1], lines[2]);
+      if (!sp4) return { ok: false, msg: `Lines ${lines[1]+1}–${lines[2]+1} are not a valid subproof` };
+
+      // Subproof conclusion must equal derived formula
+      if (!formulasEqual(sp4.conclusion, f)) {
+        return { ok: false, msg: `∃E: subproof concludes "${sp4.conclusion}", not "${f}"` };
+      }
+
+      // Subproof assumption must be ∃x φ with x replaced by some constant c
+      const x4 = exist.variable;
+      const spAssump = sp4.assumption;
+      // Find c: try all terms until ∃x φ[c/x] matches the assumption
+      const possibleTerms2 = 'abcdefghijklmnopqrstuvw'.split('');
+      let c2 = j.subst ? j.subst.from : null;
+      if (!c2) {
+        for (const cand of possibleTerms2) {
+          const candidate = substitute(unparse(exist.scope), x4, cand);
+          if (formulasEqual(candidate, spAssump)) { c2 = cand; break; }
+        }
+      }
+      if (!c2) return { ok: false, msg: `∃E: subproof assumption "${spAssump}" doesn't match ∃${x4}φ for any constant c` };
+
+      // Check c2 is not free in the conclusion ψ
+      if (isFreeIn(c2, f)) {
+        return { ok: false, msg: `∃E: the constant '${c2}' must not be free in the conclusion "${f}"` };
+      }
+
+      // Check c2 is not free in any undischarged assumption
+      for (let i = 0; i < idx; i++) {
+        const r = proof[i];
+        if (r.depth > proof[idx].depth) continue;
+        if ((r.type === 'premise' || r.type === 'assumption') && isFreeIn(c2, r.formula)) {
+          return { ok: false, msg: `∃E: constant '${c2}' appears free in undischarged assumption at line ${i+1}` };
+        }
+      }
+
       return { ok: true };
     }
 
@@ -1395,7 +1692,22 @@ document.getElementById('symBar').addEventListener('click', e => {
 // RULES REFERENCE PANEL
 // ═══════════════════════════════════════════════════════════════
 const rulesList = document.getElementById('rulesList');
+let lastWasFOL = false;
 RULES.forEach(rule => {
+  // Insert section divider before FOL rules
+  if (rule.isFOL && !lastWasFOL) {
+    const divider = document.createElement('div');
+    divider.style.cssText = 'padding:6px 14px 4px;font-family:var(--mono);font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);border-top:1px solid var(--border);background:var(--accent-light);font-weight:700;';
+    divider.textContent = 'First-Order Logic';
+    rulesList.appendChild(divider);
+    lastWasFOL = true;
+  }
+  if (!rule.isFOL && lastWasFOL === undefined) {
+    const divider2 = document.createElement('div');
+    divider2.style.cssText = 'padding:6px 14px 4px;font-family:var(--mono);font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);border-top:1px solid var(--border);background:var(--bg);';
+    divider2.textContent = 'Truth-Functional Logic';
+    rulesList.appendChild(divider2);
+  }
   const item = document.createElement('div');
   item.className = 'rule-item';
   item.innerHTML = `
