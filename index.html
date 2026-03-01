@@ -507,6 +507,72 @@ header span {
 @media (max-width: 800px) {
   .main { grid-template-columns: 1fr; }
 }
+
+/* ─── FOL SYNTAX PANEL ─── */
+.fol-section {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 14px;
+}
+.fol-section:last-child { border-bottom: none; }
+.fol-section-title {
+  font-family: var(--mono);
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.fol-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .82rem;
+  margin-bottom: 6px;
+}
+.fol-table th {
+  font-family: var(--mono);
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+  text-align: left;
+  padding: 2px 6px 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.fol-table td {
+  padding: 3px 6px 3px 0;
+  vertical-align: top;
+  color: var(--ink);
+}
+.fol-table tr:not(:last-child) td { border-bottom: 1px solid #f0ece6; }
+.fol-ex code {
+  font-family: var(--mono);
+  font-size: .82rem;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 1px 5px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.fol-note {
+  font-size: .78rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.fol-note-cell {
+  font-size: .78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.fol-note-cell code {
+  font-family: var(--mono);
+  font-size: .78rem;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
 </style>
 </head>
 <body>
@@ -615,7 +681,70 @@ header span {
         <p style="margin-bottom:8px;"><strong>5. FOL quantifiers</strong> — Write <code>∀x Fx</code> or <code>∃x Gxy</code>. For <code>∀E</code> and <code>∃I</code> specify the substitution: <code>∀E 1 [x/a]</code> (replace x with a). For <code>∀I</code> write <code>∀I 3-5 [c/x]</code> (c is the arbitrary constant, x the variable). For <code>∃E</code> write <code>∃E 1 2-4</code>.</p>
         <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
         <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
-        <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — <code>Ax</code> for ∀x, <code>Ex</code> for ∃x. Predicates: uppercase letter (not A/E alone) + lowercase terms, e.g. <code>Fa</code>, <code>Gab</code>. Identity: <code>a=b</code>.</p>
+        <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
+      </div>
+    </div>
+
+    <!-- FOL Syntax Reference -->
+    <div class="panel" id="folSyntaxPanel">
+      <div class="panel-header">
+        <span>FOL Syntax Guide</span>
+      </div>
+      <div class="panel-body" style="padding:0;">
+
+        <div class="fol-section">
+          <div class="fol-section-title">Atomic sentences</div>
+          <table class="fol-table">
+            <tr><td class="fol-ex"><code>P</code></td><td>TFL sentence letter</td></tr>
+            <tr><td class="fol-ex"><code>Fa</code></td><td>Predicate F, term a</td></tr>
+            <tr><td class="fol-ex"><code>Gab</code></td><td>Relation G, terms a, b</td></tr>
+            <tr><td class="fol-ex"><code>a=b</code></td><td>Identity</td></tr>
+          </table>
+          <div class="fol-note">Predicates: single uppercase letter (not A or E alone).<br>Terms / constants: single lowercase letter a–w.<br>Variables: single lowercase letter a–z (used inside quantifiers).</div>
+        </div>
+
+        <div class="fol-section">
+          <div class="fol-section-title">Writing quantifiers</div>
+          <table class="fol-table">
+            <tr><th>You type</th><th>Means</th></tr>
+            <tr><td class="fol-ex"><code>∀x Fx</code></td><td>For all x: Fx</td></tr>
+            <tr><td class="fol-ex"><code>forall x Fx</code></td><td>Same (word form)</td></tr>
+            <tr><td class="fol-ex"><code>all x Fx</code></td><td>Same (word form)</td></tr>
+            <tr><td class="fol-ex"><code>∃x Fx</code></td><td>There exists x: Fx</td></tr>
+            <tr><td class="fol-ex"><code>exists x Fx</code></td><td>Same (word form)</td></tr>
+            <tr><td class="fol-ex"><code>some x Fx</code></td><td>Same (word form)</td></tr>
+          </table>
+          <div class="fol-note">Use parentheses to delimit scope when needed: <code>∀x (Fx → Gx)</code>.<br>Without parens, the quantifier takes the rest of the line as its scope.<br><strong>Note:</strong> <code>Ax</code>/<code>Ex</code> shorthands are not supported — they are ambiguous with predicate applications like <code>Ea</code> (predicate E applied to a).</div>
+        </div>
+
+        <div class="fol-section">
+          <div class="fol-section-title">Justification notation</div>
+          <table class="fol-table">
+            <tr><th>Rule</th><th>Write</th><th>Example</th></tr>
+            <tr>
+              <td>∀E</td>
+              <td><code>∀E m [x/t]</code></td>
+              <td class="fol-note-cell">From <code>∀x Fx</code> on line 1,<br>derive <code>Fa</code>: write <code>∀E 1 [x/a]</code></td>
+            </tr>
+            <tr>
+              <td>∃I</td>
+              <td><code>∃I m [t/x]</code></td>
+              <td class="fol-note-cell">From <code>Fa</code> on line 2,<br>derive <code>∃x Fx</code>: write <code>∃I 2 [a/x]</code></td>
+            </tr>
+            <tr>
+              <td>∀I</td>
+              <td><code>∀I m [c/x]</code></td>
+              <td class="fol-note-cell">From <code>Fc</code> on line 3 (c arbitrary),<br>derive <code>∀x Fx</code>: write <code>∀I 3 [c/x]</code><br><span style="font-size:.75rem">c must not appear in any premise or undischarged assumption. [c/x] can often be omitted.</span></td>
+            </tr>
+            <tr>
+              <td>∃E</td>
+              <td><code>∃E m i–j</code></td>
+              <td class="fol-note-cell">From <code>∃x Fx</code> on line 1 and<br>subproof on lines 2–4: write <code>∃E 1 2-4</code></td>
+            </tr>
+          </table>
+          <div class="fol-note"><strong>[x/t]</strong> means "substitute variable x with term t". The substitution spec can often be omitted — the checker will infer it automatically for ∀E and ∃I.</div>
+        </div>
+
       </div>
     </div>
 
@@ -695,16 +824,32 @@ function normalizeFormula(s) {
   if (s == null) return "";
   s = String(s);
   return s
-    .replace(/<->/g, '↔').replace(/<>/g, '↔')
+    .replace(/<->/g, '↔').replace(/<>/g, '↔').replace(/[Bb]iff\b/g, '↔')
     .replace(/->/g, '→').replace(/=>/g, '→')
     .replace(/\/\\/g, '∧').replace(/\^/g, '∧').replace(/&/g, '∧')
     .replace(/\\\//g, '∨')
     .replace(/~|-(?!>)/g, '¬')
     .replace(/_\|_/g, '⊥').replace(/\bXX\b|#/g, '⊥')
-    // Quantifier shorthands: Ax → ∀x, Ex → ∃x
-    // Only when A/E is followed by exactly one lowercase letter then non-lowercase (space, end, paren)
-    .replace(/(?<![A-Za-z])A([a-z])(?![a-z])/g, '∀$1')
-    .replace(/(?<![A-Za-z])E([a-z])(?![a-z])/g, '∃$1')
+    .trim();
+}
+
+// Expand quantifier shorthands — call ONLY on raw user input, never on
+// already-normalized formulas (to avoid mangling predicate names like Ea or Ax).
+// NOTE: single-letter shorthands Ax/Ex are intentionally omitted here because
+// they are ambiguous with FOL atoms (e.g. Ea could mean predicate E applied to
+// constant a, or the existential ∃a). Use ∀/∃ symbols or word forms instead.
+function preprocessInput(s) {
+  if (s == null) return "";
+  s = normalizeFormula(String(s));
+  return s
+    // Unambiguous word forms
+    .replace(/\bforall\s+([a-z])\b/gi, '∀$1')
+    .replace(/\ball\s+([a-z])\b/gi,    '∀$1')
+    .replace(/\bexists\s+([a-z])\b/gi, '∃$1')
+    .replace(/\bsome\s+([a-z])\b/gi,   '∃$1')
+    // ∀(x)φ / ∃(x)φ  →  ∀x φ / ∃x φ
+    .replace(/∀\s*\(([a-z])\)\s*/g, '∀$1 ')
+    .replace(/∃\s*\(([a-z])\)\s*/g, '∃$1 ')
     .trim();
 }
 
@@ -727,7 +872,7 @@ const RULES = [
   { key: 'X',   name: 'Explosion (Ex Falso)',   abbr: 'X',   form: '⊥ (m) → φ',                               desc: 'From ⊥ (contradiction) on line m, derive anything.',                       lines: 1 },
   { key: 'IP',  name: 'Indirect Proof',         abbr: 'IP',  form: '[¬φ⊢⊥] (m–n) → φ',                       desc: 'From a subproof assuming ¬φ and deriving ⊥, derive φ.',                    lines: 2 },
   // ── First-Order Logic ──
-  { key: '∀I',  name: 'Universal Intro',        abbr: '∀I',  form: '[c arbitrary⊢φc] (m–n) → ∀x φx',          desc: 'From a subproof assuming an arbitrary constant c (not free in any undischarged assumption) and deriving φ[c], derive ∀x φ[x]. Write as: ∀I m–n [c/x].', lines: 2, isFOL: true },
+  { key: '∀I',  name: 'Universal Intro',        abbr: '∀I',  form: 'φc (m) → ∀x φx  (c not in premises)',      desc: 'From φc on line m (where c is an arbitrary constant not free in any undischarged assumption), derive ∀x φx. Write as: ∀I m [c/x]. The [c/x] spec can often be omitted — the checker will infer it.', lines: 1, isFOL: true },
   { key: '∀E',  name: 'Universal Elim',         abbr: '∀E',  form: '∀x φx (m) → φ[t/x]',                      desc: 'From ∀x φ on line m, derive φ[t/x] for any term t. Write as: ∀E m [x/t].', lines: 1, isFOL: true },
   { key: '∃I',  name: 'Existential Intro',      abbr: '∃I',  form: 'φ[t/x] (m) → ∃x φx',                      desc: 'From φ[t] on line m, derive ∃x φ[x]. Write as: ∃I m [t/x].', lines: 1, isFOL: true },
   { key: '∃E',  name: 'Existential Elim',       abbr: '∃E',  form: '∃x φx (m), [φc⊢ψ] (i–j) → ψ',            desc: 'From ∃x φ and a subproof from φ[c] to ψ (c not free in ψ or any undischarged assumption), derive ψ. Write as: ∃E m i–j.', lines: 3, isFOL: true },
@@ -931,7 +1076,16 @@ function parse(f) {
 
 function formulasEqual(a, b) {
   if (a == null || b == null) return false;
-  return normalizeFormula(a).replace(/\s+/g,' ').trim() === normalizeFormula(b).replace(/\s+/g,' ').trim();
+  // Accept either a string or a parsed node object
+  const sa = (typeof a === 'object') ? unparse(a) : a;
+  const sb = (typeof b === 'object') ? unparse(b) : b;
+  // Canonicalise: normalise symbols, collapse all whitespace, then
+  // strip spaces around every operator so spacing differences don't matter
+  const canon = s => normalizeFormula(s)
+    .replace(/\s*(↔|→|∨|∧|∀|∃)\s*/g, '$1')
+    .replace(/\s+/g, '')
+    .trim();
+  return canon(sa) === canon(sb);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1210,43 +1364,47 @@ function checkLine(proof, idx) {
     // ══ UNIVERSAL QUANTIFIER ══
 
     case '∀I': case 'UI': case 'FORALL-I': {
-      // ∀I m–n [c/x]  — subproof from line m (assumption of arbitrary c) to line n (φ[c])
-      // Conclusion must be ∀x φ[x]
-      if (lines.length < 2) return { ok: false, msg: '∀I needs a subproof range, e.g. ∀I 3-5 [c/x]' };
+      // ∀I m [c/x]  — from φc on line m, derive ∀x φx
+      // (c must not appear free in any undischarged assumption)
+      // Also accepts a subproof range: ∀I m-n [c/x] (uses line n as the φc instance)
+      if (lines.length < 1) return { ok: false, msg: '∀I needs a line reference, e.g. ∀I 3 [c/x]' };
       if (p?.type !== '∀') return { ok: false, msg: 'Formula must be ∀x φ for ∀I' };
 
-      const sp = getSubproofRange(proof, lines[0], lines[1]);
-      if (!sp) return { ok: false, msg: `Lines ${lines[0]+1}–${lines[1]+1} are not a valid subproof` };
+      const boundVar = p.variable;  // x
 
-      const boundVar = p.variable;      // x  (the variable being universalised)
-      // The subproof assumption should introduce the arbitrary constant c
-      const arb = sp.assumption.trim(); // This is "φ[c]" for the arbitrary c
-      // The subproof conclusion should be φ[c]
-      const concl = sp.conclusion.trim();
+      // The line containing φc: if a range is given use the last line; otherwise the single line
+      const instanceIdx = lines.length >= 2 ? lines[1] : lines[0];
+      const instanceFormula = normalizeFormula(L(instanceIdx) || '');
+      if (!instanceFormula) return { ok: false, msg: `Line ${instanceIdx+1} is empty` };
 
-      // Determine c: from subst spec if given, or try to infer from assumption
-      let c = j.subst ? j.subst.from : null;
-      if (!c) {
-        // Try to infer: find a term in assumption that maps to x in conclusion ∀x φ
-        // Heuristic: if assumption is a single atom-like formula, c is its term
-        // For robustness, require explicit [c/x]
-        return { ok: false, msg: '∀I: please specify the arbitrary constant, e.g. ∀I 3-5 [c/x]' };
-      }
-      const x = j.subst ? j.subst.to : boundVar;
+      // Determine c — from explicit [c/x] spec or auto-infer
+      let arbC = j.subst ? j.subst.from : null;
+      const xVar = j.subst ? j.subst.to : boundVar;
 
-      // Check: substituting x for c in the conclusion's scope should give concl
-      const scopeWithC = substitute(unparse(p.scope), x, c);
-      if (!formulasEqual(scopeWithC, concl)) {
-        return { ok: false, msg: `∀I: conclusion scope with ${c} substituted for ${x} should be "${concl}" but got "${scopeWithC}"` };
+      if (!arbC) {
+        // Auto-infer: find which constant in instanceFormula, when substituted for xVar
+        // in the scope of ∀xVar φ, reproduces instanceFormula
+        const allTerms = 'abcdefghijklmnopqrstuvwxyz'.split('');
+        for (const cand of allTerms) {
+          const candidate = substitute(unparse(p.scope), xVar, cand);
+          if (formulasEqual(candidate, instanceFormula)) { arbC = cand; break; }
+        }
+        if (!arbC) return { ok: false, msg: `∀I: cannot match line ${instanceIdx+1} ("${instanceFormula}") to ∀${boundVar} scope — specify the constant explicitly, e.g. ∀I ${instanceIdx+1} [c/${boundVar}]` };
       }
 
-      // Check: c must not appear free in any undischarged assumption at current depth
+      // Verify: scope[xVar ↦ arbC] = instanceFormula
+      const scopeWithC = substitute(unparse(p.scope), xVar, arbC);
+      if (!formulasEqual(scopeWithC, instanceFormula)) {
+        return { ok: false, msg: `∀I: substituting ${xVar}→${arbC} in scope gives "${scopeWithC}", but line ${instanceIdx+1} is "${instanceFormula}"` };
+      }
+
+      // Check: arbC must not appear free in any undischarged assumption or premise
+      // (lines at current depth or shallower, before this line, not in a closed subproof)
       for (let i = 0; i < idx; i++) {
         const r = proof[i];
-        // Undischarged = same or lesser depth, before current line, and not inside a closed subproof
         if (r.depth > proof[idx].depth) continue;
-        if ((r.type === 'premise' || r.type === 'assumption') && isFreeIn(c, r.formula)) {
-          return { ok: false, msg: `∀I: arbitrary constant '${c}' appears free in line ${i+1} ("${r.formula}"), which is an undischarged assumption` };
+        if ((r.type === 'premise' || r.type === 'assumption') && isFreeIn(arbC, r.formula)) {
+          return { ok: false, msg: `∀I: constant '${arbC}' appears free in the undischarged ${r.type} at line ${i+1} ("${r.formula}")` };
         }
       }
 
@@ -1264,7 +1422,7 @@ function checkLine(proof, idx) {
       if (!t) {
         // Try to infer t by comparing ∀x φ with conclusion
         // Find what term was substituted: scope of univ with x replaced by each possible term
-        const possibleTerms = 'abcdefghijklmnopqrstuvw'.split('');
+        const possibleTerms = 'abcdefghijklmnopqrstuvwxyz'.split('');
         for (const cand of possibleTerms) {
           const candidate = substitute(unparse(univ.scope), x2, cand);
           if (formulasEqual(candidate, f)) { t = cand; break; }
@@ -1290,7 +1448,7 @@ function checkLine(proof, idx) {
       let t2 = j.subst ? j.subst.from : null;
       if (!t2) {
         // Try to infer t from source line
-        const possibleTerms = 'abcdefghijklmnopqrstuvw'.split('');
+        const possibleTerms = 'abcdefghijklmnopqrstuvwxyz'.split('');
         for (const cand of possibleTerms) {
           const candidate = substitute(unparse(p.scope), x3, cand);
           if (formulasEqual(candidate, sourceLine)) { t2 = cand; break; }
@@ -1325,7 +1483,7 @@ function checkLine(proof, idx) {
       const x4 = exist.variable;
       const spAssump = sp4.assumption;
       // Find c: try all terms until ∃x φ[c/x] matches the assumption
-      const possibleTerms2 = 'abcdefghijklmnopqrstuvw'.split('');
+      const possibleTerms2 = 'abcdefghijklmnopqrstuvwxyz'.split('');
       let c2 = j.subst ? j.subst.from : null;
       if (!c2) {
         for (const cand of possibleTerms2) {
@@ -1414,7 +1572,7 @@ function render() {
       scheduleSnapshot();
     });
     formInput.addEventListener('blur', e => {
-      proof[idx].formula = normalizeFormula(e.target.value);
+      proof[idx].formula = preprocessInput(e.target.value);
       formInput.value = proof[idx].formula;
     });
     formTd.appendChild(formInput);
@@ -1572,8 +1730,8 @@ document.getElementById('createProofBtn').addEventListener('click', () => {
   const concStr = document.getElementById('conclusionInput').value.trim();
   if (!concStr) { alert('Please enter a conclusion.'); return; }
 
-  const premises = premStr.split(/[,;]/).map(s => normalizeFormula(s)).filter(Boolean);
-  conclusionFormula = normalizeFormula(concStr);
+  const premises = premStr.split(/[,;]/).map(s => preprocessInput(s)).filter(Boolean);
+  conclusionFormula = preprocessInput(concStr);
 
   proof = [];
   undoStack = [];
