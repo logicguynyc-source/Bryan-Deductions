@@ -1076,16 +1076,27 @@ function parse(f) {
 
 function formulasEqual(a, b) {
   if (a == null || b == null) return false;
-  // Accept either a string or a parsed node object
-  const sa = (typeof a === 'object') ? unparse(a) : a;
-  const sb = (typeof b === 'object') ? unparse(b) : b;
-  // Canonicalise: normalise symbols, collapse all whitespace, then
-  // strip spaces around every operator so spacing differences don't matter
-  const canon = s => normalizeFormula(s)
-    .replace(/\s*(↔|→|∨|∧|∀|∃)\s*/g, '$1')
-    .replace(/\s+/g, '')
-    .trim();
+  // Accept either a string or a parsed node object — convert to string first
+  const sa = (typeof a === 'object') ? unparse(a) : String(a);
+  const sb = (typeof b === 'object') ? unparse(b) : String(b);
+  // Canonicalise by round-tripping through the parser: this normalises
+  // parenthesisation so ∃x (Px∨Qx) and ∃x Px∨Qx compare as equal.
+  const canon = s => {
+    const node = parseFOL(normalizeFormula(s));
+    const unparsed = node ? unparse(node) : normalizeFormula(s);
+    return unparsed
+      .replace(/\s*(↔|→|∨|∧|∀|∃)\s*/g, '$1')
+      .replace(/\s+/g, '')
+      .trim();
+  };
   return canon(sa) === canon(sb);
+}
+
+// Safely convert a parsed node OR a string to a display string
+function str(x) {
+  if (x == null) return '?';
+  if (typeof x === 'object') return unparse(x);
+  return String(x);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1252,8 +1263,8 @@ function checkLine(proof, idx) {
       if (p?.type !== '→') return { ok: false, msg: 'Formula is not a conditional' };
       const sp = getSubproofRange(proof, lines[0], lines[1]);
       if (!sp) return { ok: false, msg: `Lines ${lines[0]+1}–${lines[1]+1} are not a valid subproof (first line must be an assumption)` };
-      if (!formulasEqual(sp.assumption, p.left)) return { ok: false, msg: `Subproof assumption ${sp.assumption} ≠ antecedent ${p.left}` };
-      if (!formulasEqual(sp.conclusion, p.right)) return { ok: false, msg: `Subproof conclusion ${sp.conclusion} ≠ consequent ${p.right}` };
+      if (!formulasEqual(sp.assumption, p.left)) return { ok: false, msg: `Subproof assumption "${sp.assumption}" ≠ antecedent "${str(p.left)}"` };
+      if (!formulasEqual(sp.conclusion, p.right)) return { ok: false, msg: `Subproof conclusion "${sp.conclusion}" ≠ consequent "${str(p.right)}"` };
       return { ok: true };
     }
 
@@ -1265,13 +1276,13 @@ function checkLine(proof, idx) {
         const impl2 = P(lines[1]);
         if (impl2?.type !== '→') return { ok: false, msg: `Neither line ${lines[0]+1} nor ${lines[1]+1} is a conditional` };
         const ante2 = normalizeFormula(L(lines[0]) || '');
-        if (!formulasEqual(impl2.left, ante2)) return { ok: false, msg: `${ante2} ≠ antecedent ${impl2.left}` };
-        if (!formulasEqual(impl2.right, f)) return { ok: false, msg: `Consequent is ${impl2.right}, not ${f}` };
+        if (!formulasEqual(impl2.left, ante2)) return { ok: false, msg: `"${ante2}" ≠ antecedent "${str(impl2.left)}"` };
+        if (!formulasEqual(impl2.right, f)) return { ok: false, msg: `Consequent is "${str(impl2.right)}", not "${f}"` };
         return { ok: true };
       }
       const ante = normalizeFormula(L(lines[1]) || '');
-      if (!formulasEqual(impl.left, ante)) return { ok: false, msg: `${ante} ≠ antecedent ${impl.left}` };
-      if (!formulasEqual(impl.right, f)) return { ok: false, msg: `Consequent is ${impl.right}, not ${f}` };
+      if (!formulasEqual(impl.left, ante)) return { ok: false, msg: `"${ante}" ≠ antecedent "${str(impl.left)}"` };
+      if (!formulasEqual(impl.right, f)) return { ok: false, msg: `Consequent is "${str(impl.right)}", not "${f}"` };
       return { ok: true };
     }
 
