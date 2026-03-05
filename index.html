@@ -997,7 +997,7 @@ function substNode(node, v, t) {
 
 function needsParens(node) {
   if (!node) return false;
-  return ['∧','∨','→','↔'].includes(node.type);
+  return ['∧','∨','→','↔','∀','∃'].includes(node.type);
 }
 
 function unparse(node) {
