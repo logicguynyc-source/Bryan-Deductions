@@ -855,11 +855,16 @@ function normalizeFormula(s) {
     .replace(/->/g, '→').replace(/=>/g, '→')
     .replace(/\/\\/g, '∧').replace(/\^/g, '∧').replace(/&/g, '∧')
     .replace(/\\\//g, '∨')
+    // Normalise ¬ BEFORE v→∨ so patterns like )v-φ and )v~φ are handled correctly
+    .replace(/~|-(?!>)/g, '¬')
+    .replace(/_\|_/g, '⊥').replace(/\bXX\b|#/g, '⊥')
+    // v → ∨  (multiple patterns, all run after ¬ is already in place)
     .replace(/\s+[vV]\s+/g, ' ∨ ')
     .replace(/\)\s*[vV]\s*(?=\(|¬|∀|∃|[A-Z]|⊥)/g, ') ∨ ')
     .replace(/(?<=\)|[a-z]|[A-Z]|⊥)\s*[vV]\s*\(/g, ' ∨ (')
-    .replace(/~|-(?!>)/g, '¬')
-    .replace(/_\|_/g, '⊥').replace(/\bXX\b|#/g, '⊥')
+    // Final robust sweep: v between any formula-ending token and any formula-starting token
+    .replace(/([\)\w⊥∀∃¬])\s*v\s*(?=[¬∀∃(⊥])/g, '$1 ∨ ')
+    .replace(/([\)\w⊥∀∃¬])\s*v\s*(?=[A-Z])/g, '$1 ∨ ')
     .trim();
 }
 
@@ -1360,7 +1365,7 @@ function checkLine(proof, idx) {
       return { ok: false, msg: `${f} is not a conjunct of ${L(lines[0])}` };
     }
 
-    case '∨I': case 'OI': {
+    case '∨I': case 'OI': case 'VI': {
       if (lines.length < 1) return { ok: false, msg: '∨I needs 1 line reference' };
       if (p?.type !== '∨') return { ok: false, msg: 'Formula is not a disjunction' };
       const lf2 = normalizeFormula(L(lines[0]) || '');
@@ -1368,7 +1373,7 @@ function checkLine(proof, idx) {
       return { ok: false, msg: `Line ${lines[0]+1} matches neither disjunct` };
     }
 
-    case '∨E': case 'OE': {
+    case '∨E': case 'OE': case 'VE': {
       if (lines.length < 3) return { ok: false, msg: '∨E needs 3 line references: disjunction, end of sub1, end of sub2' };
       const disj = P(lines[0]);
       if (disj?.type !== '∨') return { ok: false, msg: `Line ${lines[0]+1} is not a disjunction` };
@@ -1469,9 +1474,12 @@ function checkLine(proof, idx) {
       // Check: one line is ¬φ and the other is φ
       if (p0?.type === 'neg' && formulasEqual(p0.sub, p1)) return { ok: true };
       if (p1?.type === 'neg' && formulasEqual(p1.sub, p0)) return { ok: true };
-      // Fallback to string-based comparison (for malformed/opaque parses)
+      // Fallback: string-level unparse comparison
       if (p0?.type === 'neg' && formulasEqual(unparse(p0.sub), l1)) return { ok: true };
       if (p1?.type === 'neg' && formulasEqual(unparse(p1.sub), l0)) return { ok: true };
+      // Final fallback: raw string has ¬ prefix — strip it and compare canonically
+      if (l1.startsWith('¬') && formulasEqual(l1.slice(1).trim(), l0)) return { ok: true };
+      if (l0.startsWith('¬') && formulasEqual(l0.slice(1).trim(), l1)) return { ok: true };
       return { ok: false, msg: `⊥I: line ${lines[0]+1} ("${l0}") and line ${lines[1]+1} ("${l1}") are not a contradictory pair φ and ¬φ` };
     }
 
