@@ -1073,12 +1073,12 @@ function parseFOL(f) {
   const qp = parseQuantPrefix(f);
   if (qp) return { type: qp.quant, variable: qp.variable, scope: parseFOL(qp.rest) };
 
-  // Negation: ¬φ
-  if (f.startsWith('¬')) return { type: 'neg', sub: parseFOL(f.slice(1).trim()) };
-
   // Binary connectives (scanned right-to-left, lowest precedence first: ↔ → ∨ ∧)
   const bin = splitOn(f, ['↔','→','∨','∧']);
   if (bin) return { type: bin.op, left: parseFOL(bin.left), right: parseFOL(bin.right) };
+
+  // Negation: ¬φ
+  if (f.startsWith('¬')) return { type: 'neg', sub: parseFOL(f.slice(1).trim()) };
 
   // Identity: a = b  (two lowercase terms with =)
   const idm = f.match(/^([a-z])\s*=\s*([a-z])$/);
