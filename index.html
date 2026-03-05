@@ -355,7 +355,34 @@ header span {
 }
 
 /* ─── RIGHT PANEL: rules reference ─── */
-.rules-list { display: flex; flex-direction: column; gap: 0; }
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.rule-section-divider {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 6px 14px 4px;
+  font-family: var(--mono);
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  border-top: 1px solid var(--border);
+}
+.rule-section-divider-tfl {
+  color: var(--muted);
+  background: var(--bg);
+}
+.rule-section-divider-fol {
+  color: var(--accent);
+  background: var(--accent-light);
+  font-weight: 700;
+}
 
 .rule-item {
   padding: 8px 14px;
@@ -1865,21 +1892,23 @@ document.getElementById('symBar').addEventListener('click', e => {
 // RULES REFERENCE PANEL
 // ═══════════════════════════════════════════════════════════════
 const rulesList = document.getElementById('rulesList');
-let lastWasFOL = false;
+let tflHeaderAdded = false;
+let folHeaderAdded = false;
 RULES.forEach(rule => {
-  // Insert section divider before FOL rules
-  if (rule.isFOL && !lastWasFOL) {
-    const divider = document.createElement('div');
-    divider.style.cssText = 'padding:6px 14px 4px;font-family:var(--mono);font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);border-top:1px solid var(--border);background:var(--accent-light);font-weight:700;';
-    divider.textContent = 'First-Order Logic';
-    rulesList.appendChild(divider);
-    lastWasFOL = true;
-  }
-  if (!rule.isFOL && lastWasFOL === undefined) {
+  if (!rule.isFOL && !tflHeaderAdded) {
     const divider2 = document.createElement('div');
-    divider2.style.cssText = 'padding:6px 14px 4px;font-family:var(--mono);font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);border-top:1px solid var(--border);background:var(--bg);';
+    divider2.className = 'rule-section-divider rule-section-divider-tfl';
     divider2.textContent = 'Truth-Functional Logic';
     rulesList.appendChild(divider2);
+    tflHeaderAdded = true;
+  }
+  // Insert section divider before FOL rules
+  if (rule.isFOL && !folHeaderAdded) {
+    const divider = document.createElement('div');
+    divider.className = 'rule-section-divider rule-section-divider-fol';
+    divider.textContent = 'First-Order Logic';
+    rulesList.appendChild(divider);
+    folHeaderAdded = true;
   }
   const item = document.createElement('div');
   item.className = 'rule-item';
