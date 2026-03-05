@@ -855,6 +855,9 @@ function normalizeFormula(s) {
     .replace(/->/g, '→').replace(/=>/g, '→')
     .replace(/\/\\/g, '∧').replace(/\^/g, '∧').replace(/&/g, '∧')
     .replace(/\\\//g, '∨')
+    .replace(/\s+[vV]\s+/g, ' ∨ ')
+    .replace(/\)\s*[vV]\s*(?=\(|¬|∀|∃|[A-Z]|⊥)/g, ') ∨ ')
+    .replace(/(?<=\)|[a-z]|[A-Z]|⊥)\s*[vV]\s*\(/g, ' ∨ (')
     .replace(/~|-(?!>)/g, '¬')
     .replace(/_\|_/g, '⊥').replace(/\bXX\b|#/g, '⊥')
     .trim();
@@ -868,7 +871,7 @@ function normalizeFormula(s) {
 function preprocessInput(s) {
   if (s == null) return "";
   s = normalizeFormula(String(s));
-  return s
+  s = s
     // Unambiguous word forms
     .replace(/\bforall\s+([a-z])\b/gi, '∀$1')
     .replace(/\ball\s+([a-z])\b/gi,    '∀$1')
@@ -878,6 +881,14 @@ function preprocessInput(s) {
     .replace(/∀\s*\(([a-z])\)\s*/g, '∀$1 ')
     .replace(/∃\s*\(([a-z])\)\s*/g, '∃$1 ')
     .trim();
+
+  // Predicate application sugar: P(a) -> Pa, R(x,y) -> Rxy
+  // Supports single-letter lowercase terms and strips commas/spaces.
+  s = s.replace(/([A-Z][A-Za-z0-9]*)\s*\(\s*([a-z](?:\s*,\s*[a-z])*)\s*\)/g, (_, pred, args) => {
+    return pred + args.replace(/[\s,]/g, '');
+  });
+
+  return s;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -903,6 +914,7 @@ const RULES = [
   { key: '∀E',  name: 'Universal Elim',         abbr: '∀E',  form: '∀x φx (m) → φ[t/x]',                      desc: 'From ∀x φ on line m, derive φ[t/x] for any term t. Write as: ∀E m [x/t].', lines: 1, isFOL: true },
   { key: '∃I',  name: 'Existential Intro',      abbr: '∃I',  form: 'φ[t/x] (m) → ∃x φx',                      desc: 'From φ[t] on line m, derive ∃x φ[x]. Write as: ∃I m [t/x].', lines: 1, isFOL: true },
   { key: '∃E',  name: 'Existential Elim',       abbr: '∃E',  form: '∃x φx (m), [φc⊢ψ] (i–j) → ψ',            desc: 'From ∃x φ and a subproof from φ[c] to ψ (c not free in ψ or any undischarged assumption), derive ψ. Write as: ∃E m i–j.', lines: 3, isFOL: true },
+  { key: '=E',  name: 'Identity Elim',          abbr: '=E',  form: 'a=b (m), φ[a] (n) → φ[b]',                desc: 'Substitute identicals: from a=b and φ[a], derive φ[b].', lines: 2, isFOL: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -1069,13 +1081,21 @@ function parseFOL(f) {
   // ⊥
   if (f === '⊥') return { type: 'bot', formula: '⊥' };
 
-  // Quantifier: ∀x φ or ∃x φ (must come before negation check)
+  // Quantifier: ∀x φ or ∃x φ
   const qp = parseQuantPrefix(f);
-  if (qp) return { type: qp.quant, variable: qp.variable, scope: parseFOL(qp.rest) };
+
+  // If quantifier scope is explicitly parenthesized (e.g. ∀x(Gx)∨H),
+  // allow top-level binary parsing first so this can read as (∀x(Gx))∨H.
+  // If unparenthesized (e.g. ∀x Gx∨H), quantifier binds the rest of the line.
+  const quantifierBindsWholeRest = !!(qp && !qp.rest.startsWith('('));
 
   // Binary connectives (scanned right-to-left, lowest precedence first: ↔ → ∨ ∧)
-  const bin = splitOn(f, ['↔','→','∨','∧']);
-  if (bin) return { type: bin.op, left: parseFOL(bin.left), right: parseFOL(bin.right) };
+  if (!quantifierBindsWholeRest) {
+    const bin = splitOn(f, ['↔','→','∨','∧']);
+    if (bin) return { type: bin.op, left: parseFOL(bin.left), right: parseFOL(bin.right) };
+  }
+
+  if (qp) return { type: qp.quant, variable: qp.variable, scope: parseFOL(qp.rest) };
 
   // Negation: ¬φ
   if (f.startsWith('¬')) return { type: 'neg', sub: parseFOL(f.slice(1).trim()) };
@@ -1124,6 +1144,80 @@ function str(x) {
   if (x == null) return '?';
   if (typeof x === 'object') return unparse(x);
   return String(x);
+}
+
+function collectPropositionalVars(node, vars = new Set()) {
+  if (!node) return false;
+  switch (node.type) {
+    case 'bot':
+      return true;
+    case 'atom':
+      if (!/^[A-Z]+$/.test(node.formula)) return false;
+      vars.add(node.formula);
+      return true;
+    case 'neg':
+      return collectPropositionalVars(node.sub, vars);
+    case '∧':
+    case '∨':
+    case '→':
+    case '↔':
+      return collectPropositionalVars(node.left, vars) && collectPropositionalVars(node.right, vars);
+    default:
+      return false;
+  }
+}
+
+function evalPropositionalNode(node, env) {
+  if (!node) return null;
+  switch (node.type) {
+    case 'bot': return false;
+    case 'atom': return !!env[node.formula];
+    case 'neg': return !evalPropositionalNode(node.sub, env);
+    case '∧': return evalPropositionalNode(node.left, env) && evalPropositionalNode(node.right, env);
+    case '∨': return evalPropositionalNode(node.left, env) || evalPropositionalNode(node.right, env);
+    case '→': return !evalPropositionalNode(node.left, env) || evalPropositionalNode(node.right, env);
+    case '↔': return evalPropositionalNode(node.left, env) === evalPropositionalNode(node.right, env);
+    default: return null;
+  }
+}
+
+function evaluatePropositionalFormula(formula, env) {
+  const node = parse(preprocessInput(formula));
+  if (!node) return null;
+  if (!collectPropositionalVars(node, new Set())) return null;
+  return evalPropositionalNode(node, env);
+}
+
+function checkPropositionalEntailment(premises, conclusion) {
+  const parsedPremises = premises.map(p => parse(preprocessInput(p)));
+  const parsedConclusion = parse(preprocessInput(conclusion));
+  if (parsedPremises.some(p => !p) || !parsedConclusion) {
+    return { supported: false, valid: false, reason: 'Parse failure in test case' };
+  }
+
+  const vars = new Set();
+  for (const p of parsedPremises) {
+    if (!collectPropositionalVars(p, vars)) {
+      return { supported: false, valid: false, reason: 'Premises are not purely propositional' };
+    }
+  }
+  if (!collectPropositionalVars(parsedConclusion, vars)) {
+    return { supported: false, valid: false, reason: 'Conclusion is not purely propositional' };
+  }
+
+  const names = [...vars];
+  const total = 1 << names.length;
+  for (let mask = 0; mask < total; mask++) {
+    const env = {};
+    for (let i = 0; i < names.length; i++) env[names[i]] = !!(mask & (1 << i));
+    const premisesTrue = parsedPremises.every(p => evalPropositionalNode(p, env));
+    if (!premisesTrue) continue;
+    const conclusionTrue = evalPropositionalNode(parsedConclusion, env);
+    if (!conclusionTrue) {
+      return { supported: true, valid: false, counterexample: env };
+    }
+  }
+  return { supported: true, valid: true, counterexample: null };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1231,6 +1325,7 @@ function checkLine(proof, idx) {
   // Check line reference accessibility
   for (const li of lines) {
     if (li < 0 || li >= proof.length) return { ok: false, msg: `Line ${li+1} does not exist` };
+    if (li >= idx) return { ok: false, msg: `Line ${li+1} cannot be referenced from line ${idx+1} (no self or forward references)` };
     // Check it's accessible (not in a closed subproof deeper than current)
     if (proof[li].depth > row.depth) {
       // It's in a subproof — allowed only if that subproof is still open at current point
@@ -1345,7 +1440,10 @@ function checkLine(proof, idx) {
       if (p?.type !== 'neg') return { ok: false, msg: 'Formula must be a negation' };
       const sp2 = getSubproofRange(proof, lines[0], lines[1]);
       if (!sp2) return { ok: false, msg: `Lines ${lines[0]+1}–${lines[1]+1} are not a valid subproof` };
-      if (!formulasEqual(sp2.assumption, unparse(p.sub))) return { ok: false, msg: `Subproof assumes ${sp2.assumption}, not ${unparse(p.sub)}` };
+      const sp2AssumptionParsed = parse(sp2.assumption);
+      if (!formulasEqual(sp2AssumptionParsed ?? sp2.assumption, p.sub)) {
+        return { ok: false, msg: `Subproof assumes ${sp2.assumption}, not ${str(p.sub)}` };
+      }
       if (sp2.conclusion !== '⊥') return { ok: false, msg: `Subproof must conclude ⊥, not ${sp2.conclusion}` };
       return { ok: true };
     }
@@ -1391,13 +1489,16 @@ function checkLine(proof, idx) {
       const assumP = parse(sp3.assumption);
       if (assumP?.type !== 'neg') return { ok: false, msg: `Subproof assumption must be a negation ¬φ` };
       if (sp3.conclusion !== '⊥') return { ok: false, msg: `Subproof must conclude ⊥` };
-      if (!formulasEqual(unparse(assumP.sub), f)) return { ok: false, msg: `¬φ assumption has φ = ${unparse(assumP.sub)}, not ${f}` };
+      const goalParsed = parse(f);
+      if (!formulasEqual(assumP.sub, goalParsed ?? f)) return { ok: false, msg: `¬φ assumption has φ = ${str(assumP.sub)}, not ${f}` };
       return { ok: true };
     }
 
     case 'R': case 'REIT': {
       if (lines.length < 1) return { ok: false, msg: 'R (Reiteration) needs 1 line reference' };
-      if (!formulasEqual(f, normalizeFormula(L(lines[0]) || ''))) return { ok: false, msg: `Formula doesn't match line ${lines[0]+1}` };
+      const refF = normalizeFormula(L(lines[0]) || '');
+      const refP = P(lines[0]);
+      if (!formulasEqual(p ?? f, refP ?? refF)) return { ok: false, msg: `Formula doesn't match line ${lines[0]+1}` };
       return { ok: true };
     }
 
@@ -1548,6 +1649,34 @@ function checkLine(proof, idx) {
       }
 
       return { ok: true };
+    }
+
+    case '=E': case 'IDE': case 'IDENTITY-E': {
+      if (lines.length < 2) return { ok: false, msg: '=E needs 2 line refs: identity and source formula' };
+
+      const pA = P(lines[0]);
+      const pB = P(lines[1]);
+
+      const identity = pA?.type === 'identity' ? pA : (pB?.type === 'identity' ? pB : null);
+      const identityLine = pA?.type === 'identity' ? lines[0] : lines[1];
+      const sourceLine = identityLine === lines[0] ? lines[1] : lines[0];
+
+      if (!identity) return { ok: false, msg: 'One referenced line must be an identity (a=b)' };
+
+      const source = normalizeFormula(L(sourceLine) || '');
+      const target = f;
+
+      const leftToRight = substitute(source, identity.left, identity.right);
+      const rightToLeft = substitute(source, identity.right, identity.left);
+
+      if (formulasEqual(leftToRight, target) || formulasEqual(rightToLeft, target)) {
+        return { ok: true };
+      }
+
+      return {
+        ok: false,
+        msg: `=E: substituting with ${identity.left}=${identity.right} in line ${sourceLine+1} does not yield ${target}`
+      };
     }
 
     default:
@@ -1979,8 +2108,493 @@ document.addEventListener('keydown', e => {
   }
 });
 
+function runDevSelfTests() {
+  function runScriptedProofTest(testCase) {
+    const scriptedProof = [];
+    testCase.premises.forEach(p => {
+      scriptedProof.push({
+        type: 'premise',
+        formula: preprocessInput(p),
+        justification: 'Pr',
+        depth: 0
+      });
+    });
+    testCase.lines.forEach(line => {
+      const isAssumption = line.type === 'assumption';
+      scriptedProof.push({
+        type: isAssumption ? 'assumption' : 'step',
+        formula: preprocessInput(line.formula),
+        justification: isAssumption ? 'As' : (line.justification || ''),
+        depth: line.depth
+      });
+    });
+
+    const lineFailures = [];
+    scriptedProof.forEach((_, idx) => {
+      const r = checkLine(scriptedProof, idx);
+      if (!r.ok) lineFailures.push(`L${idx + 1}: ${r.msg}`);
+    });
+
+    const nonEmpty = scriptedProof.filter(r => (r.formula || '').trim());
+    const lastFormula = nonEmpty.length ? normalizeFormula(nonEmpty[nonEmpty.length - 1].formula) : '';
+    const concludes = formulasEqual(lastFormula, preprocessInput(testCase.conclusion));
+
+    if (lineFailures.length) {
+      return { ok: false, details: lineFailures.join(' | ') };
+    }
+    if (!concludes) {
+      return {
+        ok: false,
+        details: `last line "${lastFormula || '∅'}" does not match conclusion "${preprocessInput(testCase.conclusion)}"`
+      };
+    }
+    return { ok: true, details: '' };
+  }
+
+  const tests = [
+    {
+      name: 'ASCII v normalizes to disjunction',
+      ok: normalizeFormula('P v Q') === 'P ∨ Q'
+    },
+    {
+      name: 'Parenthesized quantified disjunction parses as top-level ∨',
+      ok: parse('((∀x Dx)∨(¬∀x Dx))')?.type === '∨'
+    },
+    {
+      name: 'Contradictory quantified pair recognized',
+      ok: formulasEqual(parse('((∀x Dx)∨(¬∀x Dx))'), parse('((∀x Dx)∨(¬∀x Dx))'))
+        && formulasEqual(parse('¬((∀x Dx)∨(¬∀x Dx))')?.sub, parse('((∀x Dx)∨(¬∀x Dx))'))
+    },
+    {
+      name: 'No self/forward reference enforced',
+      ok: (() => {
+        const fakeProof = [
+          { type: 'premise', formula: 'P', justification: 'Pr', depth: 0 },
+          { type: 'step', formula: 'P', justification: 'R 2', depth: 0 }
+        ];
+        const r = checkLine(fakeProof, 1);
+        return r && r.ok === false && /no self or forward references/i.test(r.msg || '');
+      })()
+    }
+  ];
+
+  const classicProblems = [
+    {
+      name: "Peirce's Law",
+      premises: [],
+      conclusion: '((P → Q) → P) → P',
+      expectedValid: true
+    },
+    {
+      name: 'Exportation / Currying',
+      premises: ['P → (Q → R)'],
+      conclusion: '(P ∧ Q) → R',
+      expectedValid: true
+    },
+    {
+      name: 'Consequentia Mirabilis',
+      premises: [],
+      conclusion: '(¬P → P) → P',
+      expectedValid: true
+    },
+    {
+      name: 'Disjunctive Syllogism Lookalike',
+      premises: ['P ∨ Q', '¬P ∨ R'],
+      conclusion: 'Q ∨ R',
+      expectedValid: true
+    },
+    {
+      name: 'Hypothetical Syllogism with Twist',
+      premises: ['P → Q', '¬P → Q'],
+      conclusion: 'Q',
+      expectedValid: true
+    },
+    {
+      name: 'Invalid Affirming the Consequent',
+      premises: ['P → Q', 'Q'],
+      conclusion: 'P',
+      expectedValid: false,
+      countermodel: { P: false, Q: true }
+    },
+    {
+      name: 'De Morgan Stretch',
+      premises: ['¬(P ∨ Q)'],
+      conclusion: '¬P ∧ ¬Q',
+      expectedValid: true
+    },
+    {
+      name: 'Distribution Trap',
+      premises: ['P → (Q ∨ R)'],
+      conclusion: '(P → Q) ∨ (P → R)',
+      expectedValid: true
+    },
+    {
+      name: 'Invalid Near-Miss of Modus Tollens',
+      premises: ['P → Q', '¬Q → R', 'R'],
+      conclusion: '¬P',
+      expectedValid: false,
+      countermodel: { P: true, Q: true, R: true }
+    },
+    {
+      name: 'Double Negation of Excluded Middle',
+      premises: [],
+      conclusion: '¬¬(P ∨ ¬P)',
+      expectedValid: true
+    }
+  ];
+
+  classicProblems.forEach((problem, i) => {
+    const result = checkPropositionalEntailment(problem.premises, problem.conclusion);
+    let ok = result.supported && result.valid === problem.expectedValid;
+    let details = '';
+
+    if (!result.supported) {
+      details = result.reason || 'unsupported formula class';
+    } else if (problem.expectedValid && !result.valid) {
+      details = `unexpected counterexample: ${JSON.stringify(result.counterexample)}`;
+    } else if (!problem.expectedValid && result.valid) {
+      details = 'expected invalid but semantics says valid';
+    }
+
+    if (ok && problem.countermodel) {
+      const premisesTrue = problem.premises.every(p => evaluatePropositionalFormula(p, problem.countermodel) === true);
+      const conclusionFalse = evaluatePropositionalFormula(problem.conclusion, problem.countermodel) === false;
+      ok = premisesTrue && conclusionFalse;
+      if (!ok) details = `provided countermodel failed check: ${JSON.stringify(problem.countermodel)}`;
+    }
+
+    tests.push({
+      name: `Classic problem ${i + 1}: ${problem.name}`,
+      ok,
+      details
+    });
+  });
+
+  const scriptedProofs = [
+    {
+      name: "Scripted proof: Peirce's Law",
+      premises: [],
+      conclusion: '((P → Q) → P) → P',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '(P → Q) → P' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { type: 'assumption', depth: 3, formula: 'P' },
+        { depth: 3, formula: '⊥', justification: '⊥I 2,3' },
+        { depth: 3, formula: 'Q', justification: 'X 4' },
+        { depth: 2, formula: 'P → Q', justification: '→I 3-5' },
+        { depth: 2, formula: 'P', justification: '→E 1,6' },
+        { depth: 2, formula: '⊥', justification: '⊥I 2,7' },
+        { depth: 1, formula: '¬¬P', justification: '¬I 2-8' },
+        { depth: 1, formula: 'P', justification: '¬E 9' },
+        { depth: 0, formula: '((P → Q) → P) → P', justification: '→I 1-10' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Exportation / Currying',
+      premises: ['P → (Q → R)'],
+      conclusion: '(P ∧ Q) → R',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P ∧ Q' },
+        { depth: 1, formula: 'P', justification: '∧E 2' },
+        { depth: 1, formula: 'Q', justification: '∧E 2' },
+        { depth: 1, formula: 'Q → R', justification: '→E 1,3' },
+        { depth: 1, formula: 'R', justification: '→E 4,5' },
+        { depth: 0, formula: '(P ∧ Q) → R', justification: '→I 2-6' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Consequentia Mirabilis',
+      premises: [],
+      conclusion: '(¬P → P) → P',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬P → P' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { depth: 2, formula: 'P', justification: '→E 1,2' },
+        { depth: 2, formula: '⊥', justification: '⊥I 2,3' },
+        { depth: 1, formula: '¬¬P', justification: '¬I 2-4' },
+        { depth: 1, formula: 'P', justification: '¬E 5' },
+        { depth: 0, formula: '(¬P → P) → P', justification: '→I 1-6' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Disjunctive Syllogism Lookalike',
+      premises: ['P ∨ Q', '¬P ∨ R'],
+      conclusion: 'Q ∨ R',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { depth: 2, formula: '⊥', justification: '⊥I 3,4' },
+        { depth: 2, formula: 'Q ∨ R', justification: 'X 5' },
+        { type: 'assumption', depth: 2, formula: 'R' },
+        { depth: 2, formula: 'Q ∨ R', justification: '∨I 7' },
+        { depth: 1, formula: 'Q ∨ R', justification: '∨E 2,6,8' },
+        { type: 'assumption', depth: 1, formula: 'Q' },
+        { depth: 1, formula: 'Q ∨ R', justification: '∨I 10' },
+        { depth: 0, formula: 'Q ∨ R', justification: '∨E 1,9,11' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Hypothetical Syllogism with Twist',
+      premises: ['P → Q', '¬P → Q'],
+      conclusion: 'Q',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬Q' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { depth: 2, formula: 'Q', justification: '→E 2,4' },
+        { depth: 2, formula: '⊥', justification: '⊥I 3,5' },
+        { depth: 1, formula: 'P', justification: 'IP 4-6' },
+        { depth: 1, formula: 'Q', justification: '→E 1,7' },
+        { depth: 1, formula: '⊥', justification: '⊥I 3,8' },
+        { depth: 0, formula: '¬¬Q', justification: '¬I 3-9' },
+        { depth: 0, formula: 'Q', justification: '¬E 10' }
+      ]
+    },
+    {
+      name: 'Scripted proof: De Morgan Stretch',
+      premises: ['¬(P ∨ Q)'],
+      conclusion: '¬P ∧ ¬Q',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P' },
+        { depth: 1, formula: 'P ∨ Q', justification: '∨I 2' },
+        { depth: 1, formula: '⊥', justification: '⊥I 1,3' },
+        { depth: 0, formula: '¬P', justification: '¬I 2-4' },
+        { type: 'assumption', depth: 1, formula: 'Q' },
+        { depth: 1, formula: 'P ∨ Q', justification: '∨I 6' },
+        { depth: 1, formula: '⊥', justification: '⊥I 1,7' },
+        { depth: 0, formula: '¬Q', justification: '¬I 6-8' },
+        { depth: 0, formula: '¬P ∧ ¬Q', justification: '∧I 5,9' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Distribution Trap',
+      premises: ['P → (Q ∨ R)'],
+      conclusion: '(P → Q) ∨ (P → R)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬((P → Q) ∨ (P → R))' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { type: 'assumption', depth: 3, formula: 'P' },
+        { depth: 3, formula: '⊥', justification: '⊥I 2,3' },
+        { depth: 3, formula: 'Q', justification: 'X 4' },
+        { depth: 2, formula: 'P → Q', justification: '→I 3-5' },
+        { depth: 2, formula: '(P → Q) ∨ (P → R)', justification: '∨I 6' },
+        { depth: 2, formula: '⊥', justification: '⊥I 1,7' },
+        { depth: 1, formula: '¬¬P', justification: '¬I 2-8' },
+        { depth: 1, formula: 'P', justification: '¬E 9' },
+        { type: 'assumption', depth: 2, formula: 'Q' },
+        { type: 'assumption', depth: 3, formula: 'P' },
+        { depth: 3, formula: 'Q', justification: 'R 11' },
+        { depth: 2, formula: 'P → Q', justification: '→I 12-13' },
+        { depth: 2, formula: '(P → Q) ∨ (P → R)', justification: '∨I 14' },
+        { depth: 2, formula: '⊥', justification: '⊥I 1,15' },
+        { depth: 1, formula: '¬Q', justification: '¬I 11-16' },
+        { depth: 1, formula: 'Q ∨ R', justification: '→E 1,10' },
+        { type: 'assumption', depth: 2, formula: 'Q' },
+        { depth: 2, formula: '⊥', justification: '⊥I 17,19' },
+        { depth: 2, formula: 'R', justification: 'X 20' },
+        { type: 'assumption', depth: 2, formula: 'R' },
+        { depth: 2, formula: 'R', justification: 'R 22' },
+        { depth: 1, formula: 'R', justification: '∨E 18,21,23' },
+        { type: 'assumption', depth: 2, formula: 'P' },
+        { depth: 2, formula: 'R', justification: 'R 24' },
+        { depth: 1, formula: 'P → R', justification: '→I 25-26' },
+        { depth: 1, formula: '(P → Q) ∨ (P → R)', justification: '∨I 27' },
+        { depth: 1, formula: '⊥', justification: '⊥I 1,28' },
+        { depth: 0, formula: '¬¬((P → Q) ∨ (P → R))', justification: '¬I 1-29' },
+        { depth: 0, formula: '(P → Q) ∨ (P → R)', justification: '¬E 30' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Double Negation of Excluded Middle',
+      premises: [],
+      conclusion: '¬¬(P ∨ ¬P)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬(P ∨ ¬P)' },
+        { type: 'assumption', depth: 2, formula: 'P' },
+        { depth: 2, formula: 'P ∨ ¬P', justification: '∨I 2' },
+        { depth: 2, formula: '⊥', justification: '⊥I 1,3' },
+        { depth: 1, formula: '¬P', justification: '¬I 2-4' },
+        { depth: 1, formula: 'P ∨ ¬P', justification: '∨I 5' },
+        { depth: 1, formula: '⊥', justification: '⊥I 1,6' },
+        { depth: 0, formula: '¬¬(P ∨ ¬P)', justification: '¬I 1-7' }
+      ]
+    }
+  ];
+
+  scriptedProofs.forEach(script => {
+    const r = runScriptedProofTest(script);
+    tests.push({ name: script.name, ok: r.ok, details: r.details });
+  });
+
+  const folSemanticChecks = [
+    {
+      name: 'FOL invalid trap #5 countermodel sanity (quantifier swap)',
+      ok: (() => {
+        const domain = [0, 1];
+        const R = (x, y) => x === y;
+        const premiseTrue = domain.every(y => domain.some(x => R(x, y))); // ∀y∃x Rxy
+        const conclusionTrue = domain.some(x => domain.every(y => R(x, y))); // ∃x∀y Rxy
+        return premiseTrue === true && conclusionTrue === false;
+      })()
+    },
+    {
+      name: 'FOL invalid trap #11 countermodel sanity (witness merging)',
+      ok: (() => {
+        const domain = [1, 2];
+        const P = x => x === 1;
+        const Q = x => x === 2;
+        const premise1 = domain.some(x => P(x)); // ∃x Px
+        const premise2 = domain.some(x => Q(x)); // ∃x Qx
+        const conclusion = domain.some(x => P(x) && Q(x)); // ∃x (Px ∧ Qx)
+        return premise1 === true && premise2 === true && conclusion === false;
+      })()
+    }
+  ];
+  folSemanticChecks.forEach(t => tests.push(t));
+
+  const folScriptedProofs = [
+    {
+      name: 'FOL #1 Universal Instantiation Trap',
+      premises: ['∀x (P(x) → Q(x))', 'P(a)'],
+      conclusion: 'Q(a)',
+      lines: [
+        { depth: 0, formula: 'P(a) → Q(a)', justification: '∀E 1 [x/a]' },
+        { depth: 0, formula: 'Q(a)', justification: '→E 3,2' }
+      ]
+    },
+    {
+      name: 'FOL #2 Existential from Universal',
+      premises: ['∀x P(x)'],
+      conclusion: '∃x P(x)',
+      lines: [
+        { depth: 0, formula: 'P(a)', justification: '∀E 1 [x/a]' },
+        { depth: 0, formula: '∃x P(x)', justification: '∃I 2 [a/x]' }
+      ]
+    },
+    {
+      name: 'FOL #3 Vacuous Universal',
+      premises: [],
+      conclusion: '∀x (P(x) → P(x))',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P(a)' },
+        { depth: 1, formula: 'P(a)', justification: 'R 1' },
+        { depth: 0, formula: 'P(a) → P(a)', justification: '→I 1-2' },
+        { depth: 0, formula: '∀x (P(x) → P(x))', justification: '∀I 3 [a/x]' }
+      ]
+    },
+    {
+      name: 'FOL #4 Swapping Quantifiers valid direction',
+      premises: ['∃x ∀y R(x,y)'],
+      conclusion: '∀y ∃x R(x,y)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '∀y R(a,y)' },
+        { depth: 1, formula: 'R(a,b)', justification: '∀E 2 [y/b]' },
+        { depth: 1, formula: '∃x R(x,b)', justification: '∃I 3 [a/x]' },
+        { depth: 1, formula: '∀y ∃x R(x,y)', justification: '∀I 4 [b/y]' },
+        { depth: 0, formula: '∀y ∃x R(x,y)', justification: '∃E 1 2-5' }
+      ]
+    },
+    {
+      name: 'FOL #6 Negation with Existential',
+      premises: ['¬∃x P(x)'],
+      conclusion: '∀x ¬P(x)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P(a)' },
+        { depth: 1, formula: '∃x P(x)', justification: '∃I 2 [a/x]' },
+        { depth: 1, formula: '⊥', justification: '⊥I 1,3' },
+        { depth: 0, formula: '¬P(a)', justification: '¬I 2-4' },
+        { depth: 0, formula: '∀x ¬P(x)', justification: '∀I 5 [a/x]' }
+      ]
+    },
+    {
+      name: 'FOL #7 Converse direction',
+      premises: ['∀x ¬P(x)'],
+      conclusion: '¬∃x P(x)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '∃x P(x)' },
+        { type: 'assumption', depth: 2, formula: 'P(a)' },
+        { depth: 2, formula: '¬P(a)', justification: '∀E 1 [x/a]' },
+        { depth: 2, formula: '⊥', justification: '⊥I 3,4' },
+        { depth: 1, formula: '⊥', justification: '∃E 2 3-5' },
+        { depth: 0, formula: '¬∃x P(x)', justification: '¬I 2-6' }
+      ]
+    },
+    {
+      name: 'FOL #8 Barcan-style trap (valid)',
+      premises: ['∀x (P(x) → Q)'],
+      conclusion: '(∃x P(x)) → Q',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '∃x P(x)' },
+        { type: 'assumption', depth: 2, formula: 'P(a)' },
+        { depth: 2, formula: 'P(a) → Q', justification: '∀E 1 [x/a]' },
+        { depth: 2, formula: 'Q', justification: '→E 4,3' },
+        { depth: 1, formula: 'Q', justification: '∃E 2 3-5' },
+        { depth: 0, formula: '(∃x P(x)) → Q', justification: '→I 2-6' }
+      ]
+    },
+    {
+      name: 'FOL #9 Russell-flavored near-miss',
+      premises: ['∀x (P(x) → ¬P(x))'],
+      conclusion: '¬∃x P(x)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '∃x P(x)' },
+        { type: 'assumption', depth: 2, formula: 'P(a)' },
+        { depth: 2, formula: 'P(a) → ¬P(a)', justification: '∀E 1 [x/a]' },
+        { depth: 2, formula: '¬P(a)', justification: '→E 4,3' },
+        { depth: 2, formula: '⊥', justification: '⊥I 3,5' },
+        { depth: 1, formula: '⊥', justification: '∃E 2 3-6' },
+        { depth: 0, formula: '¬∃x P(x)', justification: '¬I 2-7' }
+      ]
+    },
+    {
+      name: 'FOL #10 Leibniz identity trap',
+      premises: ['a = b', 'P(a)'],
+      conclusion: 'P(b)',
+      lines: [
+        { depth: 0, formula: 'P(b)', justification: '=E 1,2' }
+      ]
+    },
+    {
+      name: 'FOL #12 Quantifier duality classical direction',
+      premises: [],
+      conclusion: '¬∀x P(x) → ∃x ¬P(x)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬∀x P(x)' },
+        { type: 'assumption', depth: 2, formula: '¬∃x ¬P(x)' },
+        { type: 'assumption', depth: 3, formula: '¬P(a)' },
+        { depth: 3, formula: '∃x ¬P(x)', justification: '∃I 3 [a/x]' },
+        { depth: 3, formula: '⊥', justification: '⊥I 2,4' },
+        { depth: 2, formula: '¬¬P(a)', justification: '¬I 3-5' },
+        { depth: 2, formula: 'P(a)', justification: '¬E 6' },
+        { depth: 2, formula: '∀x P(x)', justification: '∀I 7 [a/x]' },
+        { depth: 2, formula: '⊥', justification: '⊥I 1,8' },
+        { depth: 1, formula: '¬¬∃x ¬P(x)', justification: '¬I 2-9' },
+        { depth: 1, formula: '∃x ¬P(x)', justification: '¬E 10' },
+        { depth: 0, formula: '¬∀x P(x) → ∃x ¬P(x)', justification: '→I 1-11' }
+      ]
+    }
+  ];
+
+  folScriptedProofs.forEach(script => {
+    const r = runScriptedProofTest(script);
+    tests.push({ name: script.name, ok: r.ok, details: r.details });
+  });
+
+  const failed = tests.filter(t => !t.ok);
+  if (failed.length) {
+    console.group('[ND self-test] Failed');
+    failed.forEach(t => console.warn('✗', t.name, t.details ? `— ${t.details}` : ''));
+    console.groupEnd();
+  } else {
+    console.info(`[ND self-test] Passed (${tests.length}/${tests.length})`);
+  }
+}
+
 // Init
 render();
+
+if (location.search.includes('ndSelfTest=1') || localStorage.getItem('ndSelfTest') === '1') {
+  runDevSelfTests();
+}
 </script>
 </body>
 </html>
