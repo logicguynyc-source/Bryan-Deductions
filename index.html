@@ -712,7 +712,7 @@ header span {
         <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
         <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
         <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
-        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> to assert φ is true. Use <strong>TI m</strong> (Truth Intro: from φ, derive True(⌜φ⌝)) and <strong>TE m</strong> (Truth Elim: from True(⌜φ⌝), derive φ). Click the ⌜ ⌝ buttons in the symbol bar to insert corner quotes.</p>
+        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> (formula) or <code>True(⌜n⌝)</code> (line number) to assert truth. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝) or True(⌜m⌝). <strong>TI</strong> (no number): self-referential truth-teller True(⌜n⌝) on line n. <strong>TE m</strong>: from True(⌜φ⌝) or True(⌜n⌝) on line m, derive the named formula. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
       </div>
     </div>
 
@@ -791,14 +791,29 @@ header span {
           <table class="fol-table">
             <tr><th>Rule</th><th>Write</th><th>Example</th></tr>
             <tr>
-              <td>TI</td>
+              <td>TI (formula)</td>
               <td><code>TI m</code></td>
-              <td class="fol-note-cell">From <code>P</code> on line 1,<br>derive <code>True(⌜P⌝)</code>: write <code>TI 1</code></td>
+              <td class="fol-note-cell">Line 1: <code>P ∨ Q</code><br>Line 2: <code>True(⌜P ∨ Q⌝)</code> &mdash; <code>TI 1</code></td>
             </tr>
             <tr>
-              <td>TE</td>
+              <td>TI (line no.)</td>
+              <td><code>TI n</code></td>
+              <td class="fol-note-cell">Line 3: <code>P ∨ Q</code><br>Line 6: <code>True(⌜3⌝)</code> &mdash; <code>TI 3</code><br><span style="font-size:.75rem">The numeral inside ⌜⌝ must match the cited line number.</span></td>
+            </tr>
+            <tr>
+              <td>TI (self-ref)</td>
+              <td><code>TI</code></td>
+              <td class="fol-note-cell">Line 5: <code>True(⌜5⌝)</code> &mdash; <code>TI</code><br><span style="font-size:.75rem">Truth-teller: no citation needed when the numeral equals the current line.</span></td>
+            </tr>
+            <tr>
+              <td>TE (formula)</td>
               <td><code>TE m</code></td>
-              <td class="fol-note-cell">From <code>True(⌜P⌝)</code> on line 2,<br>derive <code>P</code>: write <code>TE 2</code></td>
+              <td class="fol-note-cell">Line 2: <code>True(⌜P ∨ Q⌝)</code><br>Line 3: <code>P ∨ Q</code> &mdash; <code>TE 2</code></td>
+            </tr>
+            <tr>
+              <td>TE (line no.)</td>
+              <td><code>TE m</code></td>
+              <td class="fol-note-cell">Line 6: <code>True(⌜3⌝)</code><br>Line 7: <code>P ∨ Q</code> &mdash; <code>TE 6</code><br><span style="font-size:.75rem">Derives the formula on line 3, whatever it is.</span></td>
             </tr>
           </table>
         </div>
@@ -954,8 +969,8 @@ const RULES = [
   { key: '∃E',  name: 'Existential Elim',       abbr: '∃E',  form: '∃x φx (m), [φc⊢ψ] (i–j) → ψ',            desc: 'From ∃x φ and a subproof from φ[c] to ψ (c not free in ψ or any undischarged assumption), derive ψ. Write as: ∃E m i–j.', lines: 3, isFOL: true },
   { key: '=E',  name: 'Identity Elim',          abbr: '=E',  form: 'a=b (m), φ[a] (n) → φ[b]',                desc: 'Substitute identicals: from a=b and φ[a], derive φ[b].', lines: 2, isFOL: true },
   // ── Truth Theory ──
-  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)',                       desc: 'From φ on line m, derive True(⌜φ⌝). T-schema introduction. Under quasi-quotation, any variables inside ⌜⌝ still participate in substitution, so ∀x True(⌜Fx⌝) instantiated x→a yields True(⌜Fa⌝).', lines: 1, isTruth: true },
-  { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ',                       desc: 'From True(⌜φ⌝) on line m, derive φ. T-schema elimination.', lines: 1, isTruth: true },
+  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)  or  φ (m) → True(⌜m⌝)',   desc: 'Two forms. (1) Spell out the formula: from φ on line m, derive True(⌜φ⌝). Write: TI m. (2) Use a line number: from any formula on line n, derive True(⌜n⌝). Write: TI n with n matching the numeral inside the quotes. Special case: True(⌜n⌝) on line n itself (the truth-teller) needs no citation — write just TI.', lines: 1, isTruth: true },
+  { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ  or  True(⌜n⌝) (m) → formula on line n', desc: 'Two forms. (1) Formula-quote: from True(⌜φ⌝) on line m, derive φ. Write: TE m. (2) Line-number reference: from True(⌜n⌝) on line m, derive whatever formula is on line n. Write: TE m.', lines: 1, isTruth: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -1133,7 +1148,11 @@ function parseTerm(s) {
       else if (s[i] === '⌝') { depth--; if (depth === 0) { end = i; break; } }
     }
     if (end === s.length - 1) {
-      const inner = parseFOL(s.slice(1, end));
+      const innerStr = s.slice(1, end).trim();
+      // ⌜n⌝ where n is a positive integer — a line-number reference
+      if (/^\d+$/.test(innerStr)) return { type: 'lineref', lineNum: parseInt(innerStr, 10) };
+      // ⌜φ⌝ — a quasi-quoted formula
+      const inner = parseFOL(innerStr);
       return inner ? { type: 'quote', inner } : null;
     }
   }
@@ -1144,23 +1163,28 @@ function unparseTerm(term) {
   if (!term) return '?';
   if (term.type === 'var') return term.name;
   if (term.type === 'quote') return '⌜' + unparse(term.inner) + '⌝';
+  if (term.type === 'lineref') return '⌜' + term.lineNum + '⌝';
   if (typeof term === 'string') return term;
   return '?';
 }
 
 // Under quasi-quotation, substitution recurses inside ⌜…⌝.
+// Line-number references are opaque: substituting x→a inside ⌜3⌝ leaves it as ⌜3⌝.
 function substTerm(term, v, t) {
   if (!term) return term;
   if (term.type === 'var') return term.name === v ? { type: 'var', name: t } : term;
   if (term.type === 'quote') return { type: 'quote', inner: substNode(term.inner, v, t) };
+  if (term.type === 'lineref') return term;  // opaque — line numbers don't change under substitution
   return term;
 }
 
 // Under quasi-quotation, a variable is free inside ⌜…⌝.
+// Line-number references contain no variables, so isFreeInTerm is always false for them.
 function isFreeInTerm(v, term) {
   if (!term) return false;
   if (term.type === 'var') return term.name === v;
   if (term.type === 'quote') return isFreeInNode(v, term.inner);
+  if (term.type === 'lineref') return false;
   return false;
 }
 
@@ -1789,29 +1813,79 @@ function checkLine(proof, idx) {
     }
 
     case 'TI': case 'TRUE-I': {
-      // T-schema introduction: from φ (m), derive True(⌜φ⌝)
-      if (lines.length < 1) return { ok: false, msg: 'TI needs 1 line reference' };
-      if (p?.type !== 'true') return { ok: false, msg: 'Formula must be True(⌜φ⌝) for TI' };
+      // T-schema introduction.
+      // Two forms:
+      //   (a) True(⌜φ⌝)  — spell out the formula.   Justify: TI m  (line m must have φ)
+      //   (b) True(⌜n⌝)  — cite a line number.     Justify: TI n  (n must match the numeral)
+      //       Special case: True(⌜n⌝) on line n itself (truth-teller) — write just TI, no number.
+      if (p?.type !== 'true') return { ok: false, msg: 'Formula must be True(⌜…⌝) for TI' };
       const { arg: tiArg } = p;
-      if (!tiArg || tiArg.type !== 'quote') return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝' };
-      const tiPhi = normalizeFormula(L(lines[0]) || '');
-      const tiInner = unparse(tiArg.inner);
-      if (!formulasEqual(tiPhi, tiInner))
-        return { ok: false, msg: `TI: line ${lines[0]+1} is "${tiPhi}", but the quoted formula is "${tiInner}"` };
-      return { ok: true };
+      if (!tiArg) return { ok: false, msg: 'TI: missing argument inside ⌜⌝' };
+
+      if (tiArg.type === 'quote') {
+        // (a) formula-quote
+        if (lines.length < 1) return { ok: false, msg: 'TI needs 1 line reference (e.g. TI 3)' };
+        const tiPhi = normalizeFormula(L(lines[0]) || '');
+        const tiInner = unparse(tiArg.inner);
+        if (!formulasEqual(tiPhi, tiInner))
+          return { ok: false, msg: `TI: line ${lines[0]+1} is "“${tiPhi}”", but the quoted formula is "“${tiInner}”"` };
+        return { ok: true };
+      }
+
+      if (tiArg.type === 'lineref') {
+        const n    = tiArg.lineNum;   // 1-indexed line number the user typed
+        const nIdx = n - 1;           // 0-indexed
+
+        // Self-referential truth-teller: True(⌜n⌝) on line n — no citation needed
+        if (nIdx === idx) {
+          if (lines.length > 0) return { ok: false, msg: `TI: True(⌜${n}⌝) on line ${n} is a self-referential truth claim — write just "TI" with no line number` };
+          return { ok: true };
+        }
+
+        // Forward reference
+        if (nIdx > idx) return { ok: false, msg: `TI: ⌜${n}⌝ refers to future line ${n}` };
+
+        // Backward reference: the cited justification line must equal n
+        if (lines.length < 1) return { ok: false, msg: `TI: write "TI ${n}" to assert line ${n} is true` };
+        if (lines[0] !== nIdx) return { ok: false, msg: `TI: justification cites line ${lines[0]+1} but ⌜${n}⌝ names line ${n}` };
+        if (!(L(nIdx) || '').trim()) return { ok: false, msg: `TI: line ${n} is empty` };
+        return { ok: true };
+      }
+
+      return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝ or a line number ⌜n⌝' };
     }
 
     case 'TE': case 'TRUE-E': {
-      // T-schema elimination: from True(⌜φ⌝) (m), derive φ
-      if (lines.length < 1) return { ok: false, msg: 'TE needs 1 line reference' };
+      // T-schema elimination.
+      // Two forms:
+      //   (a) True(⌜φ⌝) on line m — derive φ.               Justify: TE m
+      //   (b) True(⌜n⌝)  on line m — derive formula on line n. Justify: TE m
+      if (lines.length < 1) return { ok: false, msg: 'TE needs 1 line reference (the line with True(⌜…⌝))' };
       const teLine = P(lines[0]);
-      if (teLine?.type !== 'true') return { ok: false, msg: `Line ${lines[0]+1} must be True(⌜φ⌝) for TE` };
+      if (teLine?.type !== 'true') return { ok: false, msg: `Line ${lines[0]+1} must be True(⌜…⌝) for TE` };
       const { arg: teArg } = teLine;
-      if (!teArg || teArg.type !== 'quote') return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝' };
-      const teInner = unparse(teArg.inner);
-      if (!formulasEqual(f, teInner))
-        return { ok: false, msg: `TE: quoted formula is "${teInner}", but current line is "${f}"` };
-      return { ok: true };
+      if (!teArg) return { ok: false, msg: 'TE: missing argument inside ⌜⌝' };
+
+      if (teArg.type === 'quote') {
+        // (a) formula-quote
+        const teInner = unparse(teArg.inner);
+        if (!formulasEqual(f, teInner))
+          return { ok: false, msg: `TE: quoted formula is "“${teInner}”", but current line is "“${f}”"` };
+        return { ok: true };
+      }
+
+      if (teArg.type === 'lineref') {
+        // (b) line-number reference — derive whatever is on that line
+        const n    = teArg.lineNum;
+        const nIdx = n - 1;
+        const refF = normalizeFormula(L(nIdx) || '');
+        if (!refF.trim()) return { ok: false, msg: `TE: line ${n} is empty` };
+        if (!formulasEqual(f, refF))
+          return { ok: false, msg: `TE: line ${n} has "“${refF}”", but current line is "“${f}”"` };
+        return { ok: true };
+      }
+
+      return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝ or a line number ⌜n⌝' };
     }
 
     default:
