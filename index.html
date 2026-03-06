@@ -705,7 +705,7 @@ header span {
         <p style="margin-bottom:8px;"><strong>2. Type formulas</strong> — Each row has a formula cell (left) and a justification cell (right). Click either to edit.</p>
         <p style="margin-bottom:8px;"><strong>3. Justifications</strong> — Type the rule abbreviation and line numbers, e.g. <code>∧I 1,2</code> or <code>→E 3,4</code>. Premises are labelled automatically.</p>
         <p style="margin-bottom:8px;"><strong>4. Subproofs</strong> — Use <strong>+sub</strong> to open a subproof (needed for →I, ¬I, ∨E, ∀I, ∃E). The first line is always an assumption.</p>
-        <p style="margin-bottom:8px;"><strong>5. FOL quantifiers</strong> — Write <code>∀x Fx</code> or <code>∃x Gxy</code>. For <code>∀E</code> and <code>∃I</code> specify the substitution: <code>∀E 1 [x/a]</code> (replace x with a). For <code>∀I</code> write <code>∀I 3-5 [c/x]</code> (c is the arbitrary constant, x the variable). For <code>∃E</code> write <code>∃E 1 2-4</code>.</p>
+        <p style="margin-bottom:8px;"><strong>5. FOL quantifiers</strong> — Write <code>∀x Fx</code> or <code>∃x Gxy</code>. For <code>∀E</code> and <code>∃I</code> specify the substitution: <code>∀E 1 [x/a]</code> (replace x with a). For <code>∀I</code> write <code>∀I 3-5 [c/x]</code> (c is the arbitrary constant, x the variable). For <code>∃E</code> write <code>∃E 1 2-4</code>. <strong>Scope convention:</strong> binary connectives (→, ∨, ∧, ↔) always bind more tightly than quantifier scope extension. So <code>∃x Dx→Q</code> means <code>(∃x Dx)→Q</code>. Write <code>∃x(Dx→Q)</code> to bind → inside the quantifier.</p>
         <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
         <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
         <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
@@ -1089,16 +1089,12 @@ function parseFOL(f) {
   // Quantifier: ∀x φ or ∃x φ
   const qp = parseQuantPrefix(f);
 
-  // If quantifier scope is explicitly parenthesized (e.g. ∀x(Gx)∨H),
-  // allow top-level binary parsing first so this can read as (∀x(Gx))∨H.
-  // If unparenthesized (e.g. ∀x Gx∨H), quantifier binds the rest of the line.
-  const quantifierBindsWholeRest = !!(qp && !qp.rest.startsWith('('));
-
-  // Binary connectives (scanned right-to-left, lowest precedence first: ↔ → ∨ ∧)
-  if (!quantifierBindsWholeRest) {
-    const bin = splitOn(f, ['↔','→','∨','∧']);
-    if (bin) return { type: bin.op, left: parseFOL(bin.left), right: parseFOL(bin.right) };
-  }
+  // Binary connectives always take precedence over quantifier scope — this is the
+  // standard convention: ∃x Dx→P  means  (∃x Dx)→P  not  ∃x(Dx→P).
+  // Write ∃x(Dx→P) to bind the connective inside the quantifier scope.
+  // Scan right-to-left so lowest-precedence op (↔) wins at the top level.
+  const bin = splitOn(f, ['↔','→','∨','∧']);
+  if (bin) return { type: bin.op, left: parseFOL(bin.left), right: parseFOL(bin.right) };
 
   if (qp) return { type: qp.quant, variable: qp.variable, scope: parseFOL(qp.rest) };
 
@@ -1132,7 +1128,9 @@ function formulasEqual(a, b) {
   const sa = (typeof a === 'object') ? unparse(a) : String(a);
   const sb = (typeof b === 'object') ? unparse(b) : String(b);
   // Canonicalise by round-tripping through the parser: this normalises
-  // parenthesisation so ∃x (Px∨Qx) and ∃x Px∨Qx compare as equal.
+  // operator/symbol spacing. Note: ∃x(Px∨Qx) and ∃x Px∨Qx parse differently
+  // under the standard convention (binary ops bind tighter than quantifier scope
+  // extension), so use explicit parens to control quantifier scope.
   const canon = s => {
     const node = parseFOL(normalizeFormula(s));
     const unparsed = node ? unparse(node) : normalizeFormula(s);
