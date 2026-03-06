@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Natural Deduction — Fitch-Style Proof Editor</title>
+<title>Bryan Deduction — Bryan-Style Proof Editor</title>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -605,8 +605,8 @@ header span {
 <body>
 
 <header>
-  <h1>Natural Deduction</h1>
-  <span>Fitch-Style Proof Editor</span>
+  <h1>Bryan Deduction</h1>
+  <span>Bryan-Style Proof Editor</span>
 </header>
 
 <!-- SYMBOL BAR -->
@@ -619,6 +619,9 @@ header span {
   <button class="sym-btn" data-sym="∀" title="Universal">∀</button>
   <button class="sym-btn" data-sym="∃" title="Existential">∃</button>
   <button class="sym-btn" data-sym="⊥" title="Contradiction">⊥</button>
+  <span style="width:1px;background:var(--border-dark);margin:4px 8px;align-self:stretch;display:inline-block;"></span>
+  <button class="sym-btn" data-sym="⌜" title="Left corner quote (open quasi-quotation)">⌜</button>
+  <button class="sym-btn" data-sym="⌝" title="Right corner quote (close quasi-quotation)">⌝</button>
 </div>
 
 <div class="main">
@@ -709,6 +712,7 @@ header span {
         <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
         <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
         <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
+        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> to assert φ is true. Use <strong>TI m</strong> (Truth Intro: from φ, derive True(⌜φ⌝)) and <strong>TE m</strong> (Truth Elim: from True(⌜φ⌝), derive φ). Click the ⌜ ⌝ buttons in the symbol bar to insert corner quotes.</p>
       </div>
     </div>
 
@@ -770,6 +774,33 @@ header span {
             </tr>
           </table>
           <div class="fol-note"><strong>[x/t]</strong> means "substitute variable x with term t". The substitution spec can often be omitted — the checker will infer it automatically for ∀E and ∃I.</div>
+        </div>
+
+        <div class="fol-section">
+          <div class="fol-section-title">Quasi-quotation &amp; Truth</div>
+          <table class="fol-table">
+            <tr><td class="fol-ex"><code>⌜φ⌝</code></td><td>Name of formula φ (a term)</td></tr>
+            <tr><td class="fol-ex"><code>True(⌜φ⌝)</code></td><td>Truth predicate: φ is true</td></tr>
+            <tr><td class="fol-ex"><code>∀x True(⌜Fx⌝)</code></td><td>Every Fx-instance is true</td></tr>
+          </table>
+          <div class="fol-note">⌜φ⌝ is a <em>quasi-quotation</em> term denoting φ. Unlike opaque quotation, variables inside ⌜⌝ still participate in substitution: instantiating x→a in ∀x&nbsp;True(⌜Fx⌝) yields True(⌜Fa⌝). Use the ⌜ ⌝ buttons in the symbol bar above.</div>
+        </div>
+
+        <div class="fol-section">
+          <div class="fol-section-title">Truth rule justifications</div>
+          <table class="fol-table">
+            <tr><th>Rule</th><th>Write</th><th>Example</th></tr>
+            <tr>
+              <td>TI</td>
+              <td><code>TI m</code></td>
+              <td class="fol-note-cell">From <code>P</code> on line 1,<br>derive <code>True(⌜P⌝)</code>: write <code>TI 1</code></td>
+            </tr>
+            <tr>
+              <td>TE</td>
+              <td><code>TE m</code></td>
+              <td class="fol-note-cell">From <code>True(⌜P⌝)</code> on line 2,<br>derive <code>P</code>: write <code>TE 2</code></td>
+            </tr>
+          </table>
         </div>
 
       </div>
@@ -889,7 +920,9 @@ function preprocessInput(s) {
 
   // Predicate application sugar: P(a) -> Pa, R(x,y) -> Rxy
   // Supports single-letter lowercase terms and strips commas/spaces.
+  // Exception: True(...) always keeps its function-application form for the truth predicate.
   s = s.replace(/([A-Z][A-Za-z0-9]*)\s*\(\s*([a-z](?:\s*,\s*[a-z])*)\s*\)/g, (_, pred, args) => {
+    if (pred === 'True') return `True(${args.replace(/[\s,]/g, '')})`;
     return pred + args.replace(/[\s,]/g, '');
   });
 
@@ -920,6 +953,9 @@ const RULES = [
   { key: '∃I',  name: 'Existential Intro',      abbr: '∃I',  form: 'φ[t/x] (m) → ∃x φx',                      desc: 'From φ[t] on line m, derive ∃x φ[x]. Write as: ∃I m [t/x].', lines: 1, isFOL: true },
   { key: '∃E',  name: 'Existential Elim',       abbr: '∃E',  form: '∃x φx (m), [φc⊢ψ] (i–j) → ψ',            desc: 'From ∃x φ and a subproof from φ[c] to ψ (c not free in ψ or any undischarged assumption), derive ψ. Write as: ∃E m i–j.', lines: 3, isFOL: true },
   { key: '=E',  name: 'Identity Elim',          abbr: '=E',  form: 'a=b (m), φ[a] (n) → φ[b]',                desc: 'Substitute identicals: from a=b and φ[a], derive φ[b].', lines: 2, isFOL: true },
+  // ── Truth Theory ──
+  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)',                       desc: 'From φ on line m, derive True(⌜φ⌝). T-schema introduction. Under quasi-quotation, any variables inside ⌜⌝ still participate in substitution, so ∀x True(⌜Fx⌝) instantiated x→a yields True(⌜Fa⌝).', lines: 1, isTruth: true },
+  { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ',                       desc: 'From True(⌜φ⌝) on line m, derive φ. T-schema elimination.', lines: 1, isTruth: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -1008,6 +1044,8 @@ function substNode(node, v, t) {
     case '∀': case '∃':
       if (node.variable === v) return node;  // v is bound here — stop
       return { type: node.type, variable: node.variable, scope: substNode(node.scope, v, t) };
+    case 'true':
+      return { type: 'true', arg: substTerm(node.arg, v, t) };
     default: return node;
   }
 }
@@ -1038,6 +1076,8 @@ function unparse(node) {
       const sp = needsParens(node.scope) ? `(${s})` : s;
       return `${node.type}${node.variable} ${sp}`;
     }
+    case 'true':
+      return 'True(' + unparseTerm(node.arg) + ')';
     default: return '?';
   }
 }
@@ -1065,6 +1105,8 @@ function isFreeInNode(v, node) {
     case '∀': case '∃':
       if (node.variable === v) return false;  // bound
       return isFreeInNode(v, node.scope);
+    case 'true':
+      return isFreeInTerm(v, node.arg);
     default: return false;
   }
 }
@@ -1073,6 +1115,53 @@ function isFreeIn(v, formula) {
   const node = parseFOL(normalizeFormula(formula));
   if (!node) return false;
   return isFreeInNode(v, node);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TERM HELPERS  (quasi-quotation)
+// ═══════════════════════════════════════════════════════════════
+
+// Parse a term: single lowercase variable  OR  ⌜φ⌝ (quasi-quoted formula).
+// parseTerm ↔ parseFOL are mutually recursive; JS hoisting makes order irrelevant.
+function parseTerm(s) {
+  s = s.trim();
+  if (/^[a-z]$/.test(s)) return { type: 'var', name: s };
+  if (s.startsWith('⌜')) {
+    let depth = 0, end = -1;
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === '⌜') depth++;
+      else if (s[i] === '⌝') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end === s.length - 1) {
+      const inner = parseFOL(s.slice(1, end));
+      return inner ? { type: 'quote', inner } : null;
+    }
+  }
+  return null;
+}
+
+function unparseTerm(term) {
+  if (!term) return '?';
+  if (term.type === 'var') return term.name;
+  if (term.type === 'quote') return '⌜' + unparse(term.inner) + '⌝';
+  if (typeof term === 'string') return term;
+  return '?';
+}
+
+// Under quasi-quotation, substitution recurses inside ⌜…⌝.
+function substTerm(term, v, t) {
+  if (!term) return term;
+  if (term.type === 'var') return term.name === v ? { type: 'var', name: t } : term;
+  if (term.type === 'quote') return { type: 'quote', inner: substNode(term.inner, v, t) };
+  return term;
+}
+
+// Under quasi-quotation, a variable is free inside ⌜…⌝.
+function isFreeInTerm(v, term) {
+  if (!term) return false;
+  if (term.type === 'var') return term.name === v;
+  if (term.type === 'quote') return isFreeInNode(v, term.inner);
+  return false;
 }
 
 // Full FOL parser: handles ∀/∃, connectives, atoms, identity, TFL
@@ -1104,6 +1193,20 @@ function parseFOL(f) {
   // Identity: a = b  (two lowercase terms with =)
   const idm = f.match(/^([a-z])\s*=\s*([a-z])$/);
   if (idm) return { type: 'identity', formula: f.replace(/\s/g, ''), left: idm[1], right: idm[2] };
+
+  // Truth predicate: True(t) where t is a term (⌜φ⌝ or a plain variable).
+  // Uses paren-depth counting to find the matching ')' even when φ contains parens.
+  if (f.startsWith('True(')) {
+    let depth = 1, end = -1;
+    for (let i = 5; i < f.length; i++) {
+      if (f[i] === '(') depth++;
+      else if (f[i] === ')') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end === f.length - 1) {
+      const arg = parseTerm(f.slice(5, end).trim());
+      if (arg) return { type: 'true', arg };
+    }
+  }
 
   // FOL atom: uppercase predicate letter(s) + zero or more lowercase term letters
   // Predicate must be uppercase; terms are lowercase a-z
@@ -1685,6 +1788,32 @@ function checkLine(proof, idx) {
       };
     }
 
+    case 'TI': case 'TRUE-I': {
+      // T-schema introduction: from φ (m), derive True(⌜φ⌝)
+      if (lines.length < 1) return { ok: false, msg: 'TI needs 1 line reference' };
+      if (p?.type !== 'true') return { ok: false, msg: 'Formula must be True(⌜φ⌝) for TI' };
+      const { arg: tiArg } = p;
+      if (!tiArg || tiArg.type !== 'quote') return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝' };
+      const tiPhi = normalizeFormula(L(lines[0]) || '');
+      const tiInner = unparse(tiArg.inner);
+      if (!formulasEqual(tiPhi, tiInner))
+        return { ok: false, msg: `TI: line ${lines[0]+1} is "${tiPhi}", but the quoted formula is "${tiInner}"` };
+      return { ok: true };
+    }
+
+    case 'TE': case 'TRUE-E': {
+      // T-schema elimination: from True(⌜φ⌝) (m), derive φ
+      if (lines.length < 1) return { ok: false, msg: 'TE needs 1 line reference' };
+      const teLine = P(lines[0]);
+      if (teLine?.type !== 'true') return { ok: false, msg: `Line ${lines[0]+1} must be True(⌜φ⌝) for TE` };
+      const { arg: teArg } = teLine;
+      if (!teArg || teArg.type !== 'quote') return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝' };
+      const teInner = unparse(teArg.inner);
+      if (!formulasEqual(f, teInner))
+        return { ok: false, msg: `TE: quoted formula is "${teInner}", but current line is "${f}"` };
+      return { ok: true };
+    }
+
     default:
       return { ok: false, msg: `Unknown rule: ${j.rule}` };
   }
@@ -2031,8 +2160,9 @@ document.getElementById('symBar').addEventListener('click', e => {
 const rulesList = document.getElementById('rulesList');
 let tflHeaderAdded = false;
 let folHeaderAdded = false;
+let truthHeaderAdded = false;
 RULES.forEach(rule => {
-  if (!rule.isFOL && !tflHeaderAdded) {
+  if (!rule.isFOL && !rule.isTruth && !tflHeaderAdded) {
     const divider2 = document.createElement('div');
     divider2.className = 'rule-section-divider rule-section-divider-tfl';
     divider2.textContent = 'Truth-Functional Logic';
@@ -2046,6 +2176,14 @@ RULES.forEach(rule => {
     divider.textContent = 'First-Order Logic';
     rulesList.appendChild(divider);
     folHeaderAdded = true;
+  }
+  // Insert section divider before Truth Theory rules
+  if (rule.isTruth && !truthHeaderAdded) {
+    const divider3 = document.createElement('div');
+    divider3.className = 'rule-section-divider';
+    divider3.textContent = 'Truth Theory';
+    rulesList.appendChild(divider3);
+    truthHeaderAdded = true;
   }
   const item = document.createElement('div');
   item.className = 'rule-item';
