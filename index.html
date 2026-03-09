@@ -2353,6 +2353,13 @@ function render() {
       justInput.value = 'As';
       justInput.className += ' premise-label';
       justInput.readOnly = true;
+      if (row.falsifiabilityVerified === true && row.falsifyingModel) {
+        const ann = document.createElement('div');
+        ann.title = 'Falsifying interpretation';
+        ann.style.cssText = 'font-size:.72rem;color:#1a6e2e;font-family:var(--mono);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;';
+        ann.textContent = formatFalsifyingModel(row.falsifyingModel);
+        justTd.appendChild(ann);
+      }
     } else {
       justInput.value = row.justification;
       justInput.placeholder = 'e.g. →E 1,2';
@@ -3581,6 +3588,25 @@ function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// Produce a compact one-line summary of a falsifying model, e.g.:
+// propositional: "P:F, Q:T"
+// FOL:           "domain:{a,b}; F:{a}; x=a"
+function formatFalsifyingModel(model) {
+  const parts = [];
+  if (model.domain && model.domain.length > 0)
+    parts.push('domain:{' + model.domain.join(',') + '}');
+  Object.keys(model.props || {}).sort().forEach(k =>
+    parts.push(k + ':' + (model.props[k] ? 'T' : 'F')));
+  Object.keys(model.ext || {}).sort().forEach(pred => {
+    const ext = model.ext[pred];
+    const elems = ext instanceof Set ? [...ext] : [];
+    parts.push(pred + ':{' + elems.join(',') + '}');
+  });
+  Object.keys(model.vars || {}).sort().forEach(v =>
+    parts.push(v + '=' + model.vars[v]));
+  return parts.join('; ');
+}
+
 // openCertifyIdx holds the proof index whose inline strip is currently open (or null).
 let openCertifyIdx = null;
 
@@ -3756,6 +3782,7 @@ function buildCertifyRow(idx, colSpan) {
     if (val === false) {
       proof[idx].falsifiabilityVerified = true;
       proof[idx].falsifiabilityError = null;
+      proof[idx].falsifyingModel = { props: model.props, ext: model.ext, vars: model.vars, domain: model.domain };
       openCertifyIdx = null;
       render();
     } else {
