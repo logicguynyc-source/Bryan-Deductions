@@ -809,7 +809,7 @@ header span {
             <tr><td class="fol-ex"><code>Gab</code></td><td>Relation G, terms a, b</td></tr>
             <tr><td class="fol-ex"><code>a=b</code></td><td>Identity</td></tr>
           </table>
-          <div class="fol-note">Predicates: single uppercase letter (not A or E alone).<br>Terms / constants: single lowercase letter a–w.<br>Variables: single lowercase letter a–z (used inside quantifiers).</div>
+          <div class="fol-note">Propositional variables: any single uppercase letter, or any single lowercase letter standing alone (e.g. <code>P</code>, <code>p</code>, <code>q</code>).<br>Predicates: single uppercase letter followed by one or more term letters (e.g. <code>Fx</code>, <code>Gxy</code>). Note: <code>Ax</code> and <code>Ex</code> are reserved as shorthands for <code>∀x</code> and <code>∃x</code> — use the Unicode symbols instead.<br>Terms / constants: single lowercase letter a–w.<br>Variables: single lowercase letter a–z (used inside quantifiers).</div>
         </div>
 
         <div class="fol-section">
@@ -1047,7 +1047,7 @@ const RULES = [
   { key: '∃E',  name: 'Existential Elim',       abbr: '∃E',  form: '∃x φx (m), [φc⊢ψ] (i–j) → ψ',            desc: 'From ∃x φ and a subproof from φ[c] to ψ (c not free in ψ or any undischarged assumption), derive ψ. Write as: ∃E m i–j.', lines: 3, isFOL: true },
   { key: '=E',  name: 'Identity Elim',          abbr: '=E',  form: 'a=b (m), φ[a] (n) → φ[b]',                desc: 'Substitute identicals: from a=b and φ[a], derive φ[b].', lines: 2, isFOL: true },
   // ── Truth Theory ──
-  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)  or  φ (m) → True(⌜m⌝)',   desc: 'Two forms. (1) Spell out the formula: from φ on line m, derive True(⌜φ⌝). Write: TI m. (2) Use a line number: from any formula on line n, derive True(⌜n⌝). Write: TI n with n matching the numeral inside the quotes. Special case: True(⌜n⌝) on line n itself (the truth-teller) needs no citation — write just TI.', lines: 1, isTruth: true },
+  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)  or  φ (m) → True(⌜m⌝)',   desc: 'Two forms. (1) Spell out the formula: from φ on line m, derive True(⌜φ⌝). Write: TI m. (2) Use a line number: from any formula on line n, derive True(⌜n⌝). Write: TI n with n matching the numeral inside the quotes.', lines: 1, isTruth: true },
   { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ  or  True(⌜n⌝) (m) → formula on line n', desc: 'Two forms. (1) Formula-quote: from True(⌜φ⌝) on line m, derive φ. Write: TE m. (2) Line-number reference: from True(⌜n⌝) on line m, derive whatever formula is on line n. Write: TE m.', lines: 1, isTruth: true },
 ];
 
@@ -1315,8 +1315,15 @@ function parseFOL(f) {
   // Per spec: predicates are single uppercase other than A/E alone (those are quantifier shorthands)
   if (/^[A-Z][a-z]*$/.test(f)) return { type: 'atom', formula: f };
 
-  // Opaque fallback
-  return { type: 'atom', formula: f };
+  // Sentential variable: single lowercase letter standing alone.
+  // The same letter may appear as a bound variable inside a quantifier scope, but
+  // when it fills a formula position on its own it is treated as a propositional atom.
+  // substNode and isFreeInNode are safe: their atom regex requires an uppercase prefix
+  // so they leave standalone lowercase atoms untouched.
+  if (/^[a-z]$/.test(f)) return { type: 'atom', formula: f };
+
+  // Nothing else is a WFF.
+  return null;
 }
 
 // Parse a formula (entry point): return parsed node or null
@@ -1360,7 +1367,10 @@ function collectPropositionalVars(node, vars = new Set()) {
     case 'bot':
       return true;
     case 'atom':
-      if (!/^[A-Z]+$/.test(node.formula)) return false;
+      // Accept uppercase propositional variables (e.g. P, Q) and
+      // single lowercase sentential variables (e.g. p, q, x).
+      // Reject predicate applications like Fx (uppercase + lowercase chars).
+      if (!/^[A-Z]+$/.test(node.formula) && !/^[a-z]$/.test(node.formula)) return false;
       vars.add(node.formula);
       return true;
     case 'neg':
@@ -2136,7 +2146,6 @@ function checkLine(proof, idx) {
       // Two forms:
       //   (a) True(⌜φ⌝)  — spell out the formula.   Justify: TI m  (line m must have φ)
       //   (b) True(⌜n⌝)  — cite a line number.     Justify: TI n  (n must match the numeral)
-      //       Special case: True(⌜n⌝) on line n itself (truth-teller) — write just TI, no number.
       if (p?.type !== 'true') return { ok: false, msg: 'Formula must be True(⌜…⌝) for TI' };
       const { arg: tiArg } = p;
       if (!tiArg) return { ok: false, msg: 'TI: missing argument inside ⌜⌝' };
@@ -2155,11 +2164,8 @@ function checkLine(proof, idx) {
         const n    = tiArg.lineNum;   // 1-indexed line number the user typed
         const nIdx = n - 1;           // 0-indexed
 
-        // Self-referential truth-teller: True(⌜n⌝) on line n — no citation needed
-        if (nIdx === idx) {
-          if (lines.length > 0) return { ok: false, msg: `TI: True(⌜${n}⌝) on line ${n} is a self-referential truth claim — write just "TI" with no line number` };
-          return { ok: true };
-        }
+        // Self-referential truth claims are not permitted.
+        if (nIdx === idx) return { ok: false, msg: `TI: True(⌜${n}⌝) on line ${n} — self-referential truth claims are not permitted. Use True(⌜φ⌝) with an explicit citation instead.` };
 
         // Forward reference
         if (nIdx > idx) return { ok: false, msg: `TI: ⌜${n}⌝ refers to future line ${n}` };
@@ -3163,15 +3169,21 @@ function runDevSelfTests() {
       ]
     },
     {
-      name: 'Truth #4: self-referential truth-teller',
-      // Line 1 is the premise P; line 2 (idx 1) is a step; line 3 (idx 2) is True(⌜3⌝) justified TI alone
-      premises: ['P'],
-      conclusion: 'True(⌜3⌝)',
-      lines: [
-        { depth: 0, formula: 'True(⌜P⌝)', justification: 'TI 1' },
-        // This is line 3 (premise + 2 steps = idx 2, 1-indexed = 3)
-        { depth: 0, formula: 'True(⌜3⌝)', justification: 'TI' }
-      ]
+      name: 'Truth #4 (regression): self-referential truth-teller must now fail',
+      _inline: () => {
+        // True(⌜3⌝) on line 3 (idx 2) with bare "TI" and no citation.
+        // The self-ref form has been removed, so this must be rejected.
+        const fakeProof = [
+          { type: 'premise', formula: 'P',         justification: 'Pr',  depth: 0 }, // idx 0
+          { type: 'step',    formula: 'True(⌜P⌝)', justification: 'TI 1', depth: 0 }, // idx 1
+          { type: 'step',    formula: 'True(⌜3⌝)', justification: 'TI',   depth: 0 }, // idx 2 — self-ref
+        ];
+        const r = checkLine(fakeProof, 2);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'self-referential True(⌜3⌝) with bare TI was incorrectly accepted after removal of that form' : ''
+        };
+      }
     },
     {
       name: 'Truth #5: True(⌜¬φ⌝) → ¬True(⌜φ⌝)',
@@ -3423,21 +3435,20 @@ function runDevSelfTests() {
     },
 
     {
-      name: 'Positive #10: self-referential truth-teller is NOT a forward ref',
+      name: 'Negative #10 (regression): self-referential TI must now be rejected',
       _inline: () => {
-        // True(⌜3⌝) on line 3 (idx 2) is a self-reference, not a forward reference.
-        // It must NOT be rejected by the forward-lineref check.
+        // True(⌜3⌝) on line 3 (idx 2) with bare "TI" — self-ref form is no longer valid.
+        // The checker must reject it (not because it's a forward ref, but because
+        // self-referential truth claims are disallowed).
         const fakeProof = [
-          { type: 'premise', formula: 'P',         justification: 'Pr', depth: 0 }, // idx 0
+          { type: 'premise', formula: 'P',         justification: 'Pr',   depth: 0 }, // idx 0
           { type: 'step',    formula: 'True(⌜P⌝)', justification: 'TI 1', depth: 0 }, // idx 1
-          { type: 'step',    formula: 'True(⌜3⌝)', justification: 'TI',   depth: 0 }, // idx 2 — self-ref, line 3
+          { type: 'step',    formula: 'True(⌜3⌝)', justification: 'TI',   depth: 0 }, // idx 2 — self-ref
         ];
-        // Forward-ref check on line 3 (idx 2): lineNum 3 === idx+1=3, so NOT forward.
         const r = checkLine(fakeProof, 2);
-        // We only care that it's NOT rejected by the forward-ref guard; TI self-ref logic handles the rest.
         return {
-          ok: r.ok === true,
-          details: r.ok ? '' : `self-referential True(⌜3⌝) on line 3 was incorrectly rejected: ${r.msg}`
+          ok: r.ok === false,
+          details: r.ok ? 'self-referential True(⌜3⌝) with bare TI was incorrectly accepted' : ''
         };
       }
     }
