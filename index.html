@@ -2524,7 +2524,8 @@ document.addEventListener('focusin', e => {
   if (e.target.classList.contains('formula-input') ||
       (e.target.classList.contains('just-input') && !e.target.readOnly) ||
       e.target.id === 'premisesInput' ||
-      e.target.id === 'conclusionInput') {
+      e.target.id === 'conclusionInput' ||
+      e.target.id === 'satFormulaInput') {
     pinnedInput = e.target;
     lastFocused = e.target;
   }
