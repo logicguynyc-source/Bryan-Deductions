@@ -1453,11 +1453,18 @@ function checkLine(proof, idx) {
   const P = (n) => n >= 0 && n < proof.length ? parse(normalizeFormula(proof[n].formula)) : null;
 
   // Check line reference accessibility
+  // TI (lineref form) uses a line number as a *syntactic name*, not a logical reference.
+  // The named line doesn't need to be in scope — you can name a sentence from a closed
+  // subproof just as you can refer to a sentence in a book regardless of context.
+  // So we skip the closed-subproof check specifically for TI when its argument is a lineref.
+  const isTILineref = /^(TI|TRUE-I)$/i.test(j.rule) &&
+    parse(normalizeFormula(row.formula))?.arg?.type === 'lineref';
+
   for (const li of lines) {
     if (li < 0 || li >= proof.length) return { ok: false, msg: `Line ${li+1} does not exist` };
     if (li >= idx) return { ok: false, msg: `Line ${li+1} cannot be referenced from line ${idx+1} (no self or forward references)` };
     // Check it's accessible (not in a closed subproof deeper than current)
-    if (proof[li].depth > row.depth) {
+    if (!isTILineref && proof[li].depth > row.depth) {
       // It's in a subproof — allowed only if that subproof is still open at current point
       // For simplicity: lines in deeper subproofs before idx are accessible only if
       // the subproof containing them hasn't closed before idx
@@ -2793,6 +2800,117 @@ function runDevSelfTests() {
   ];
 
   folScriptedProofs.forEach(script => {
+    const r = runScriptedProofTest(script);
+    tests.push({ name: script.name, ok: r.ok, details: r.details });
+  });
+
+  // ── Truth Theory scripted proofs ──
+  const truthScriptedProofs = [
+    {
+      name: 'Truth #1: T-schema roundtrip (atomic)',
+      premises: ['P'],
+      conclusion: 'P',
+      lines: [
+        { depth: 0, formula: 'True(⌜P⌝)',  justification: 'TI 1' },
+        { depth: 0, formula: 'P',           justification: 'TE 2' }
+      ]
+    },
+    {
+      name: 'Truth #2: T-schema roundtrip (complex formula)',
+      premises: ['(P → Q) ∧ R'],
+      conclusion: '(P → Q) ∧ R',
+      lines: [
+        { depth: 0, formula: 'True(⌜(P → Q) ∧ R⌝)', justification: 'TI 1' },
+        { depth: 0, formula: '(P → Q) ∧ R',          justification: 'TE 2' }
+      ]
+    },
+    {
+      name: 'Truth #3: line-number reference roundtrip',
+      // Line 1: P ∨ Q (premise)
+      // Line 2: step — True(⌜1⌝)  via TI 1
+      // Line 3: step — P ∨ Q      via TE 2
+      premises: ['P ∨ Q'],
+      conclusion: 'P ∨ Q',
+      lines: [
+        { depth: 0, formula: 'True(⌜1⌝)', justification: 'TI 1' },
+        { depth: 0, formula: 'P ∨ Q',     justification: 'TE 2' }
+      ]
+    },
+    {
+      name: 'Truth #4: self-referential truth-teller',
+      // Line 1 is the premise P; line 2 (idx 1) is a step; line 3 (idx 2) is True(⌜3⌝) justified TI alone
+      premises: ['P'],
+      conclusion: 'True(⌜3⌝)',
+      lines: [
+        { depth: 0, formula: 'True(⌜P⌝)', justification: 'TI 1' },
+        // This is line 3 (premise + 2 steps = idx 2, 1-indexed = 3)
+        { depth: 0, formula: 'True(⌜3⌝)', justification: 'TI' }
+      ]
+    },
+    {
+      name: 'Truth #5: True(⌜¬φ⌝) → ¬True(⌜φ⌝)',
+      premises: ['True(⌜¬P⌝)'],
+      conclusion: '¬True(⌜P⌝)',
+      lines: [
+        { depth: 0, formula: '¬P',          justification: 'TE 1' },
+        { type: 'assumption', depth: 1, formula: 'True(⌜P⌝)' },
+        { depth: 1, formula: 'P',           justification: 'TE 3' },
+        { depth: 1, formula: '⊥',           justification: '⊥I 2,4' },
+        { depth: 0, formula: '¬True(⌜P⌝)', justification: '¬I 3-5' }
+      ]
+    },
+    {
+      name: 'Truth #6: ¬True(⌜φ⌝) → True(⌜¬φ⌝)',
+      premises: ['¬True(⌜P⌝)'],
+      conclusion: 'True(⌜¬P⌝)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P' },
+        { depth: 1, formula: 'True(⌜P⌝)', justification: 'TI 2' },
+        { depth: 1, formula: '⊥',          justification: '⊥I 1,3' },
+        { depth: 0, formula: '¬P',          justification: '¬I 2-4' },
+        { depth: 0, formula: 'True(⌜¬P⌝)', justification: 'TI 5' }
+      ]
+    },
+    {
+      name: 'Truth #7: True(⌜¬φ⌝) ↔ ¬True(⌜φ⌝) (full biconditional)',
+      premises: [],
+      conclusion: 'True(⌜¬P⌝) ↔ ¬True(⌜P⌝)',
+      lines: [
+        // → direction: assume True(⌜¬P⌝), derive ¬True(⌜P⌝)
+        { type: 'assumption', depth: 1, formula: 'True(⌜¬P⌝)' },
+        { depth: 1, formula: '¬P',           justification: 'TE 1' },
+        { type: 'assumption', depth: 2, formula: 'True(⌜P⌝)' },
+        { depth: 2, formula: 'P',            justification: 'TE 3' },
+        { depth: 2, formula: '⊥',            justification: '⊥I 2,4' },
+        { depth: 1, formula: '¬True(⌜P⌝)',  justification: '¬I 3-5' },
+        { depth: 0, formula: 'True(⌜¬P⌝) → ¬True(⌜P⌝)', justification: '→I 1-6' },
+        // ← direction: assume ¬True(⌜P⌝), derive True(⌜¬P⌝)
+        { type: 'assumption', depth: 1, formula: '¬True(⌜P⌝)' },
+        { type: 'assumption', depth: 2, formula: 'P' },
+        { depth: 2, formula: 'True(⌜P⌝)',   justification: 'TI 9' },
+        { depth: 2, formula: '⊥',            justification: '⊥I 8,10' },
+        { depth: 1, formula: '¬P',           justification: '¬I 9-11' },
+        { depth: 1, formula: 'True(⌜¬P⌝)',  justification: 'TI 12' },
+        { depth: 0, formula: '¬True(⌜P⌝) → True(⌜¬P⌝)', justification: '→I 8-13' },
+        { depth: 0, formula: 'True(⌜¬P⌝) ↔ ¬True(⌜P⌝)', justification: '↔I 7,14' }
+      ]
+    },
+    {
+      name: 'Truth #8: True distributes over ∧ (→ direction)',
+      premises: ['True(⌜P ∧ Q⌝)'],
+      conclusion: 'True(⌜P⌝) ∧ True(⌜Q⌝)',
+      lines: [
+        { depth: 0, formula: 'P ∧ Q',                  justification: 'TE 1' },
+        { depth: 0, formula: 'P',                       justification: '∧E 2' },
+        { depth: 0, formula: 'Q',                       justification: '∧E 2' },
+        { depth: 0, formula: 'True(⌜P⌝)',              justification: 'TI 3' },
+        { depth: 0, formula: 'True(⌜Q⌝)',              justification: 'TI 4' },
+        { depth: 0, formula: 'True(⌜P⌝) ∧ True(⌜Q⌝)', justification: '∧I 5,6' }
+      ]
+    }
+  ];
+
+  truthScriptedProofs.forEach(script => {
     const r = runScriptedProofTest(script);
     tests.push({ name: script.name, ok: r.ok, details: r.details });
   });
