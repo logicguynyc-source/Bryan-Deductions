@@ -1569,8 +1569,11 @@ function satSearchPropositional(node, atomKeys) {
 }
 
 // For FOL: enumerate all combinations of domain-element assignments to predicates.
+// fixedVars mirrors the free-variable assignments the user entered, so that free terms
+// (e.g. x in Fxb) resolve to the same domain elements during the exhaustive search as
+// they do during the point-evaluation — preventing spurious 'Contradiction' verdicts.
 // Returns 'tautology' | 'contradiction' | 'contingent' (or 'unknown' if domain too large).
-function satSearchFOL(node, atoms, domain) {
+function satSearchFOL(node, atoms, domain, fixedVars = {}) {
   // Safety cap: abort if search space is too large
   const preds = [...atoms.predicates.entries()];
   // For each predicate of arity k, the extension is a subset of domain^k.
@@ -1600,7 +1603,7 @@ function satSearchFOL(node, atoms, domain) {
       // Now enumerate propositional combos
       const nProp = propKeys.length + linerefKeys.length;
       for (let mask = 0; mask < (1 << nProp); mask++) {
-        const model = { props: {}, ext: extSoFar, vars: {}, linerefs: {}, domain };
+        const model = { props: {}, ext: extSoFar, vars: { ...fixedVars }, linerefs: {}, domain };
         propKeys.forEach((k, i) => { model.props[k] = !!(mask >> i & 1); });
         linerefKeys.forEach((k, i) => { model.linerefs[k] = !!(mask >> (propKeys.length + i) & 1); });
         const v = satEval(node, model);
@@ -3767,7 +3770,7 @@ function runDevSelfTests() {
       ];
       if (allKeys.length <= 14) verdict = satSearchPropositional(satNode, allKeys);
     } else {
-      const v = satSearchFOL(satNode, satAtoms, model.domain);
+      const v = satSearchFOL(satNode, satAtoms, model.domain, model.vars);
       verdict = v === 'unknown' ? null : v;
     }
 
