@@ -1453,28 +1453,20 @@ function checkLine(proof, idx) {
   const P = (n) => n >= 0 && n < proof.length ? parse(normalizeFormula(proof[n].formula)) : null;
 
   // Check line reference accessibility
-  // TI (lineref form) uses a line number as a *syntactic name*, not a logical reference.
-  // The named line doesn't need to be in scope — you can name a sentence from a closed
-  // subproof just as you can refer to a sentence in a book regardless of context.
-  // So we skip the closed-subproof check specifically for TI when its argument is a lineref.
-  const isTILineref = /^(TI|TRUE-I)$/i.test(j.rule) &&
-    parse(normalizeFormula(row.formula))?.arg?.type === 'lineref';
-
+  // Check line reference accessibility.
+  // True(⌜n⌝) via TI is warranted only if the formula on line n is currently established —
+  // i.e. accessible at the point of citation. Naming a discharged assumption does NOT make
+  // it true. So TI-lineref is subject to exactly the same scope rules as every other rule.
   for (const li of lines) {
     if (li < 0 || li >= proof.length) return { ok: false, msg: `Line ${li+1} does not exist` };
     if (li >= idx) return { ok: false, msg: `Line ${li+1} cannot be referenced from line ${idx+1} (no self or forward references)` };
     // Check it's accessible (not in a closed subproof deeper than current)
-    if (!isTILineref && proof[li].depth > row.depth) {
-      // It's in a subproof — allowed only if that subproof is still open at current point
-      // For simplicity: lines in deeper subproofs before idx are accessible only if
-      // the subproof containing them hasn't closed before idx
-      // Rough heuristic: check that there's no line between li and idx at depth <= row.depth
-      // with a depth decrease that closes the subproof
+    if (proof[li].depth > row.depth) {
       let subproofClosed = false;
       for (let k = li + 1; k < idx; k++) {
         if (proof[k].depth <= row.depth) { subproofClosed = true; break; }
       }
-      if (subproofClosed) return { ok: false, msg: `Line ${li+1} is inside a closed subproof` };
+      if (subproofClosed) return { ok: false, msg: `Line ${li+1} is inside a closed subproof and cannot be cited here` };
     }
   }
 
@@ -2907,12 +2899,47 @@ function runDevSelfTests() {
         { depth: 0, formula: 'True(⌜Q⌝)',              justification: 'TI 4' },
         { depth: 0, formula: 'True(⌜P⌝) ∧ True(⌜Q⌝)', justification: '∧I 5,6' }
       ]
+    },
+    // Regression: True(⌜n⌝) must NOT be licensed when line n is a discharged assumption
+    // that has not been re-established in the main proof.
+    // This proof mirrors the screenshot: p∧¬p assumed on line 1, discharged via ¬I,
+    // and then True(⌜1⌝) attempted — that step must be INVALID.
+    {
+      name: 'Truth #9 (regression): TI citing discharged assumption must fail',
+      premises: [],
+      conclusion: '⊥',
+      // We run checkLine directly on the offending step rather than via runScriptedProofTest,
+      // because runScriptedProofTest expects all lines to be valid.
+      // Instead we push a raw inline test that verifies the checker rejects the bad step.
+      _inline: () => {
+        const fakeProof = [
+          // Line 1 (idx 0): assumption p∧¬p  at depth 1
+          { type: 'assumption', formula: 'p∧¬p', justification: 'As', depth: 1 },
+          // Line 2 (idx 1): p  from ∧E
+          { type: 'step', formula: 'p',    justification: '∧E 1', depth: 1 },
+          // Line 3 (idx 2): ¬p from ∧E
+          { type: 'step', formula: '¬p',   justification: '∧E 1', depth: 1 },
+          // Line 4 (idx 3): ⊥  from ⊥I
+          { type: 'step', formula: '⊥',    justification: '⊥I 2,3', depth: 1 },
+          // Line 5 (idx 4): ¬(p∧¬p)  closes subproof at depth 0
+          { type: 'step', formula: '¬(p∧¬p)', justification: '¬I 1-4', depth: 0 },
+          // Line 6 (idx 5): True(⌜1⌝) — citing discharged assumption — MUST FAIL
+          { type: 'step', formula: 'True(⌜1⌝)', justification: 'TI 1', depth: 0 }
+        ];
+        const r = checkLine(fakeProof, 5);
+        return { ok: r.ok === false, details: r.ok ? 'checker incorrectly accepted True(⌜1⌝) citing a discharged assumption' : '' };
+      }
     }
   ];
 
   truthScriptedProofs.forEach(script => {
-    const r = runScriptedProofTest(script);
-    tests.push({ name: script.name, ok: r.ok, details: r.details });
+    if (script._inline) {
+      const r = script._inline();
+      tests.push({ name: script.name, ok: r.ok, details: r.details });
+    } else {
+      const r = runScriptedProofTest(script);
+      tests.push({ name: script.name, ok: r.ok, details: r.details });
+    }
   });
 
   const failed = tests.filter(t => !t.ok);
