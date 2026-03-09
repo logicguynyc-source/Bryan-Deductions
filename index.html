@@ -600,6 +600,46 @@ header span {
   padding: 1px 4px;
   border-radius: 2px;
 }
+
+/* ─── SATISFIABILITY CHECKER ─── */
+#satPanel { margin-top: 18px; }
+#satPanel .panel-header { cursor: pointer; user-select: none; }
+#satPanel .panel-header .sat-toggle { font-size: .85rem; opacity: .7; }
+#satBody { padding: 16px; }
+.sat-formula-row { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+.sat-formula-row input { flex:1; font-family:var(--mono); font-size:.95rem;
+  padding:6px 10px; border:1px solid var(--border); border-radius:4px; background:var(--surface); }
+.sat-formula-row button { white-space:nowrap; }
+.sat-parse-msg { font-size:.82rem; margin-bottom:10px; }
+.sat-parse-msg.ok  { color: var(--ok); }
+.sat-parse-msg.err { color: var(--err); }
+.sat-assignments { margin-bottom:14px; }
+.sat-assign-title { font-size:.78rem; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--faint); margin-bottom:8px; }
+.sat-assign-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap:8px; }
+.sat-assign-row { display:flex; align-items:center; gap:8px;
+  background:var(--accent-light); border-radius:4px; padding:6px 10px; }
+.sat-assign-row label { font-family:var(--mono); font-size:.88rem; flex:1; color:var(--ink); }
+.sat-assign-row select { font-family:var(--mono); font-size:.85rem;
+  padding:2px 4px; border:1px solid var(--border); border-radius:3px; background:#fff; }
+.sat-domain-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.sat-domain-row label { font-size:.82rem; color:var(--faint); white-space:nowrap; }
+.sat-domain-row input { flex:1; font-family:var(--mono); font-size:.85rem;
+  padding:5px 8px; border:1px solid var(--border); border-radius:4px; background:var(--surface); }
+.sat-ext-row { display:flex; align-items:flex-start; gap:8px; margin-bottom:8px; }
+.sat-ext-row label { font-family:var(--mono); font-size:.88rem; min-width:60px; padding-top:6px; }
+.sat-ext-row input { flex:1; font-family:var(--mono); font-size:.85rem;
+  padding:5px 8px; border:1px solid var(--border); border-radius:4px; background:var(--surface); }
+.sat-ext-hint { font-size:.75rem; color:var(--faint); margin-top:2px; }
+.sat-eval-btn { margin-bottom:12px; }
+.sat-result-box { border-radius:5px; padding:12px 16px; font-size:.9rem; line-height:1.6; }
+.sat-result-box.true  { background:#d4edda; border:1px solid #6dbb7a; color:#1e5c29; }
+.sat-result-box.false { background:#fde8e8; border:1px solid #e57373; color:#7b1f1f; }
+.sat-result-box.info  { background:var(--accent-light); border:1px solid var(--accent); color:var(--ink); }
+.sat-verdict { font-weight:600; margin-top:6px; }
+.sat-verdict.tautology   { color:#1a6e2e; }
+.sat-verdict.contingent  { color:#7a5c00; }
+.sat-verdict.contradiction { color:#9b1c1c; }
 </style>
 </head>
 <body>
@@ -686,6 +726,44 @@ header span {
       <div class="empty-state">
         <div class="big">⊢</div>
         <p>Enter premises and a conclusion above to begin your proof.</p>
+      </div>
+    </div>
+
+    <!-- Satisfiability Checker -->
+    <div class="panel" id="satPanel">
+      <div class="panel-header" id="satPanelHeader">
+        <span>Satisfiability Checker</span>
+        <span class="sat-toggle" id="satToggleIcon">▼</span>
+      </div>
+      <div id="satBody">
+        <div class="sat-formula-row">
+          <input type="text" id="satFormulaInput" placeholder="Enter a formula, e.g.  (P ∧ Q) → P" />
+          <button class="btn btn-primary" id="satParseBtn">Check WFF</button>
+        </div>
+        <div class="sat-parse-msg" id="satParseMsg"></div>
+        <div id="satAssignSection" style="display:none">
+          <div id="satDomainSection" style="display:none">
+            <div class="sat-assign-title">Universe of Discourse</div>
+            <div class="sat-domain-row">
+              <label>Domain elements (comma-separated):</label>
+              <input type="text" id="satDomainInput" placeholder="e.g.  a, b, c" />
+            </div>
+          </div>
+          <div id="satPropSection" style="display:none">
+            <div class="sat-assign-title">Assign truth values</div>
+            <div class="sat-assign-grid" id="satPropGrid"></div>
+          </div>
+          <div id="satExtSection" style="display:none">
+            <div class="sat-assign-title" style="margin-top:12px">Predicate extensions</div>
+            <div id="satExtGrid"></div>
+          </div>
+          <div id="satVarSection" style="display:none">
+            <div class="sat-assign-title" style="margin-top:12px">Variable values</div>
+            <div class="sat-assign-grid" id="satVarGrid"></div>
+          </div>
+          <button class="btn btn-primary sat-eval-btn" id="satEvalBtn">Evaluate</button>
+          <div id="satResultBox"></div>
+        </div>
       </div>
     </div>
 
@@ -1316,6 +1394,206 @@ function evaluatePropositionalFormula(formula, env) {
   if (!node) return null;
   if (!collectPropositionalVars(node, new Set())) return null;
   return evalPropositionalNode(node, env);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SATISFIABILITY CHECKER ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+// Collect all atomic propositions (TFL vars), FOL predicates, free variables,
+// and True(⌜n⌝) linerefs in a formula node.
+function satCollectAtoms(node, out) {
+  // out = { props: Set<string>, predicates: Map<name, arity>, freeVars: Set<string>, linerefs: Set<number> }
+  if (!node) return;
+  switch (node.type) {
+    case 'bot': break;
+    case 'atom': {
+      const f = node.formula;
+      // Single uppercase = propositional variable; UppercaseLowercase+ = predicate application
+      const m = f.match(/^([A-Z])([a-z]*)$/);
+      if (m) {
+        if (m[2].length === 0) {
+          out.props.add(f);        // TFL propositional variable
+        } else {
+          const terms = m[2].split('');
+          if (!out.predicates.has(m[1])) out.predicates.set(m[1], terms.length);
+          terms.forEach(t => out.freeVars.add(t));
+        }
+      } else {
+        // Multi-char predicate e.g. DDD
+        out.props.add(f);
+      }
+      break;
+    }
+    case 'identity':
+      out.freeVars.add(node.left);
+      out.freeVars.add(node.right);
+      break;
+    case 'neg': satCollectAtoms(node.sub, out); break;
+    case '∧': case '∨': case '→': case '↔':
+      satCollectAtoms(node.left, out);
+      satCollectAtoms(node.right, out);
+      break;
+    case '∀': case '∃':
+      // Bound variable: remove from freeVars (it's quantified)
+      satCollectAtoms(node.scope, out);
+      out.freeVars.delete(node.variable);
+      break;
+    case 'true':
+      if (node.arg.type === 'lineref') {
+        out.linerefs.add(node.arg.lineNum);
+      } else if (node.arg.type === 'quote') {
+        // True(⌜φ⌝): recurse into quoted formula to collect its atoms
+        satCollectAtoms(node.arg.inner, out);
+      }
+      break;
+  }
+}
+
+// Evaluate a formula node under a model.
+// model = {
+//   props:    { [name]: bool }     — TFL propositions
+//   ext:      { [pred]: Set<string> | Set<string> }  — predicates; for arity-1: Set of domain elements;
+//             for arity-n: Set of JSON-stringified n-tuples
+//   vars:     { [varName]: string } — current variable binding
+//   linerefs: { [n]: bool }         — truth value of "line n"
+//   domain:   string[]              — universe of discourse
+// }
+function satEval(node, model) {
+  if (!node) return null;
+  switch (node.type) {
+    case 'bot': return false;
+    case 'atom': {
+      const f = node.formula;
+      const m = f.match(/^([A-Z])([a-z]*)$/);
+      if (!m) return !!model.props[f];
+      if (m[2].length === 0) return !!model.props[f]; // TFL var
+      // FOL atom: look up each term in vars
+      const terms = m[2].split('').map(t => model.vars[t] !== undefined ? model.vars[t] : t);
+      const pred = m[1];
+      const ext = model.ext[pred];
+      if (!ext) return false;
+      if (terms.length === 1) return ext.has(terms[0]);
+      return ext.has(JSON.stringify(terms));
+    }
+    case 'identity': {
+      const l = model.vars[node.left]  !== undefined ? model.vars[node.left]  : node.left;
+      const r = model.vars[node.right] !== undefined ? model.vars[node.right] : node.right;
+      return l === r;
+    }
+    case 'neg':  return !satEval(node.sub, model);
+    case '∧':   return satEval(node.left, model) && satEval(node.right, model);
+    case '∨':   return satEval(node.left, model) || satEval(node.right, model);
+    case '→':   return !satEval(node.left, model) || satEval(node.right, model);
+    case '↔':   return satEval(node.left, model) === satEval(node.right, model);
+    case '∀': {
+      const v = node.variable;
+      return model.domain.every(d => {
+        const m2 = { ...model, vars: { ...model.vars, [v]: d } };
+        return satEval(node.scope, m2);
+      });
+    }
+    case '∃': {
+      const v = node.variable;
+      return model.domain.some(d => {
+        const m2 = { ...model, vars: { ...model.vars, [v]: d } };
+        return satEval(node.scope, m2);
+      });
+    }
+    case 'true': {
+      if (node.arg.type === 'lineref') {
+        return !!model.linerefs[node.arg.lineNum];
+      }
+      if (node.arg.type === 'quote') {
+        // True(⌜φ⌝) inherits φ's truth value
+        return satEval(node.arg.inner, model);
+      }
+      return false;
+    }
+  }
+  return null;
+}
+
+// Enumerate all 2^n propositional+lineref assignments and check tautology/sat/contradiction.
+// Only used when no quantifiers/predicates require a domain (purely propositional).
+function satSearchPropositional(node, atomKeys) {
+  const n = atomKeys.length;
+  let hasSat = false, hasUnsat = false;
+  for (let mask = 0; mask < (1 << n); mask++) {
+    const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+    atomKeys.forEach((k, i) => {
+      if (typeof k === 'number') model.linerefs[k] = !!(mask >> i & 1);
+      else model.props[k] = !!(mask >> i & 1);
+    });
+    const v = satEval(node, model);
+    if (v) hasSat = true; else hasUnsat = true;
+    if (hasSat && hasUnsat) break;
+  }
+  if (hasSat && !hasUnsat) return 'tautology';
+  if (!hasSat)             return 'contradiction';
+  return 'contingent';
+}
+
+// For FOL: enumerate all combinations of domain-element assignments to predicates.
+// Returns 'tautology' | 'contradiction' | 'contingent' (or 'unknown' if domain too large).
+function satSearchFOL(node, atoms, domain) {
+  // Safety cap: abort if search space is too large
+  const preds = [...atoms.predicates.entries()];
+  // For each predicate of arity k, the extension is a subset of domain^k.
+  // Number of possible extensions for pred of arity k = 2^(|domain|^k).
+  // We only search if total combinations ≤ 2^14 = 16384.
+  const totalBits = preds.reduce((acc, [, arity]) => acc + Math.pow(domain.length, arity), 0)
+                  + atoms.props.size + atoms.linerefs.size;
+  if (totalBits > 14) return 'unknown';
+
+  // Generate all possible extensions for each predicate
+  function domainTuples(arity) {
+    if (arity === 1) return domain.map(d => [d]);
+    const sub = domainTuples(arity - 1);
+    return domain.flatMap(d => sub.map(t => [d, ...t]));
+  }
+
+  // Each predicate extension is a bitmask over its tuples
+  const predTuples = preds.map(([, a]) => domainTuples(a));
+  const propKeys = [...atoms.props];
+  const linerefKeys = [...atoms.linerefs];
+
+  let hasSat = false, hasUnsat = false;
+
+  function enumerate(predIdx, extSoFar) {
+    if (hasSat && hasUnsat) return;
+    if (predIdx === preds.length) {
+      // Now enumerate propositional combos
+      const nProp = propKeys.length + linerefKeys.length;
+      for (let mask = 0; mask < (1 << nProp); mask++) {
+        const model = { props: {}, ext: extSoFar, vars: {}, linerefs: {}, domain };
+        propKeys.forEach((k, i) => { model.props[k] = !!(mask >> i & 1); });
+        linerefKeys.forEach((k, i) => { model.linerefs[k] = !!(mask >> (propKeys.length + i) & 1); });
+        const v = satEval(node, model);
+        if (v) hasSat = true; else hasUnsat = true;
+        if (hasSat && hasUnsat) return;
+      }
+      return;
+    }
+    const [predName, ] = preds[predIdx];
+    const tuples = predTuples[predIdx];
+    const numTuples = tuples.length;
+    for (let mask = 0; mask < (1 << numTuples); mask++) {
+      const extSet = new Set();
+      for (let i = 0; i < numTuples; i++) {
+        if (mask >> i & 1) {
+          extSet.add(tuples[i].length === 1 ? tuples[i][0] : JSON.stringify(tuples[i]));
+        }
+      }
+      enumerate(predIdx + 1, { ...extSoFar, [predName]: extSet });
+      if (hasSat && hasUnsat) return;
+    }
+  }
+  enumerate(0, {});
+
+  if (hasSat && !hasUnsat) return 'tautology';
+  if (!hasSat)             return 'contradiction';
+  return 'contingent';
 }
 
 function checkPropositionalEntailment(premises, conclusion) {
@@ -3183,6 +3461,311 @@ function runDevSelfTests() {
     console.info(`[ND self-test] Passed (${tests.length}/${tests.length})`);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// SATISFIABILITY CHECKER UI
+// ═══════════════════════════════════════════════════════════════
+
+(function () {
+
+  // --- Collapse/expand ---
+  let satOpen = true;
+  document.getElementById('satPanelHeader').addEventListener('click', () => {
+    satOpen = !satOpen;
+    document.getElementById('satBody').style.display = satOpen ? '' : 'none';
+    document.getElementById('satToggleIcon').textContent = satOpen ? '▼' : '▶';
+  });
+
+  // State
+  let satNode = null;       // parsed AST of the formula
+  let satAtoms = null;      // { props, predicates, freeVars, linerefs }
+  let satIsFOL = false;     // does formula contain predicates/quantifiers?
+
+  // --- Step 1: parse and display assignment inputs ---
+  document.getElementById('satParseBtn').addEventListener('click', buildAssignmentUI);
+  document.getElementById('satFormulaInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') buildAssignmentUI();
+  });
+
+  function buildAssignmentUI() {
+    const raw = document.getElementById('satFormulaInput').value.trim();
+    const msg = document.getElementById('satParseMsg');
+    const section = document.getElementById('satAssignSection');
+    document.getElementById('satResultBox').innerHTML = '';
+
+    if (!raw) { msg.textContent = ''; msg.className = 'sat-parse-msg'; section.style.display = 'none'; return; }
+
+    const normalized = preprocessInput(raw);
+    satNode = parse(normalized);
+
+    if (!satNode) {
+      msg.textContent = '✗ Not a well-formed formula.';
+      msg.className = 'sat-parse-msg err';
+      section.style.display = 'none';
+      return;
+    }
+
+    msg.textContent = '✓ Well-formed formula.';
+    msg.className = 'sat-parse-msg ok';
+
+    // Collect atoms
+    satAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+    satCollectAtoms(satNode, satAtoms);
+
+    satIsFOL = satAtoms.predicates.size > 0
+            || satNode && containsQuantifier(satNode)
+            || satAtoms.freeVars.size > 0;
+
+    // Domain section
+    const domainSection = document.getElementById('satDomainSection');
+    domainSection.style.display = satIsFOL ? '' : 'none';
+
+    // Propositional variables + linerefs
+    const propSection = document.getElementById('satPropSection');
+    const propGrid = document.getElementById('satPropGrid');
+    propGrid.innerHTML = '';
+    const propItems = [...satAtoms.props].sort();
+    const linerefItems = [...satAtoms.linerefs].sort((a,b)=>a-b);
+    if (propItems.length > 0 || linerefItems.length > 0) {
+      propItems.forEach(name => propGrid.appendChild(makeTVRow(name, name)));
+      linerefItems.forEach(n => propGrid.appendChild(makeTVRow('line-' + n, `line ${n}`)));
+      propSection.style.display = '';
+    } else {
+      propSection.style.display = 'none';
+    }
+
+    // Predicate extensions
+    const extSection = document.getElementById('satExtSection');
+    const extGrid = document.getElementById('satExtGrid');
+    extGrid.innerHTML = '';
+    if (satAtoms.predicates.size > 0) {
+      satAtoms.predicates.forEach((arity, pred) => {
+        extGrid.appendChild(makeExtRow(pred, arity));
+      });
+      extSection.style.display = '';
+    } else {
+      extSection.style.display = 'none';
+    }
+
+    // Free variable values
+    const varSection = document.getElementById('satVarSection');
+    const varGrid = document.getElementById('satVarGrid');
+    varGrid.innerHTML = '';
+    const freeVarList = [...satAtoms.freeVars].sort();
+    if (freeVarList.length > 0) {
+      freeVarList.forEach(v => varGrid.appendChild(makeFreeVarRow(v)));
+      varSection.style.display = '';
+    } else {
+      varSection.style.display = 'none';
+    }
+
+    section.style.display = '';
+  }
+
+  function containsQuantifier(node) {
+    if (!node) return false;
+    if (node.type === '∀' || node.type === '∃') return true;
+    switch (node.type) {
+      case 'neg': return containsQuantifier(node.sub);
+      case '∧': case '∨': case '→': case '↔':
+        return containsQuantifier(node.left) || containsQuantifier(node.right);
+      case 'true':
+        return node.arg.type === 'quote' && containsQuantifier(node.arg.inner);
+      default: return false;
+    }
+  }
+
+  function makeTVRow(id, label) {
+    const div = document.createElement('div');
+    div.className = 'sat-assign-row';
+    const lbl = document.createElement('label');
+    lbl.textContent = label;
+    const sel = document.createElement('select');
+    sel.id = 'sat-tv-' + id;
+    ['T', 'F'].forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      sel.appendChild(o);
+    });
+    div.appendChild(lbl); div.appendChild(sel);
+    return div;
+  }
+
+  function makeExtRow(pred, arity) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sat-ext-row';
+    const lbl = document.createElement('label');
+    lbl.textContent = pred + (arity > 1 ? ' (arity ' + arity + ')' : '');
+    const col = document.createElement('div');
+    col.style.flex = '1';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.id = 'sat-ext-' + pred;
+    if (arity === 1) inp.placeholder = 'e.g.  a, b';
+    else             inp.placeholder = 'e.g.  (a,b), (b,c)';
+    const hint = document.createElement('div');
+    hint.className = 'sat-ext-hint';
+    hint.textContent = arity === 1
+      ? 'Comma-separated domain elements in the extension of ' + pred
+      : 'Comma-separated ' + arity + '-tuples in the extension of ' + pred;
+    col.appendChild(inp); col.appendChild(hint);
+    wrap.appendChild(lbl); wrap.appendChild(col);
+    return wrap;
+  }
+
+  function makeFreeVarRow(v) {
+    const div = document.createElement('div');
+    div.className = 'sat-assign-row';
+    const lbl = document.createElement('label');
+    lbl.textContent = v + '  =';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.id = 'sat-var-' + v;
+    inp.placeholder = 'domain element';
+    inp.style.width = '80px';
+    div.appendChild(lbl); div.appendChild(inp);
+    return div;
+  }
+
+  // --- Step 2: evaluate ---
+  document.getElementById('satEvalBtn').addEventListener('click', evaluate);
+
+  function evaluate() {
+    const box = document.getElementById('satResultBox');
+    box.innerHTML = '';
+    if (!satNode || !satAtoms) return;
+
+    // Build model
+    const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+
+    // Domain
+    if (satIsFOL) {
+      const rawDomain = document.getElementById('satDomainInput').value.trim();
+      if (!rawDomain) {
+        showResult(box, false, 'Please specify a universe of discourse.', null);
+        return;
+      }
+      model.domain = rawDomain.split(',').map(s => s.trim()).filter(Boolean);
+      if (model.domain.length === 0) {
+        showResult(box, false, 'Domain cannot be empty.', null);
+        return;
+      }
+    }
+
+    // Propositional vars
+    satAtoms.props.forEach(name => {
+      const sel = document.getElementById('sat-tv-' + name);
+      model.props[name] = sel ? sel.value === 'T' : false;
+    });
+
+    // Linerefs
+    satAtoms.linerefs.forEach(n => {
+      const sel = document.getElementById('sat-tv-line-' + n);
+      model.linerefs[n] = sel ? sel.value === 'T' : false;
+    });
+
+    // Predicate extensions
+    let extError = null;
+    satAtoms.predicates.forEach((arity, pred) => {
+      if (extError) return;
+      const inp = document.getElementById('sat-ext-' + pred);
+      const raw = inp ? inp.value.trim() : '';
+      if (arity === 1) {
+        model.ext[pred] = new Set(raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []);
+      } else {
+        // Parse tuples: (a,b),(c,d) or a,b — split on '),(' boundary
+        const extSet = new Set();
+        if (raw) {
+          // Find all parenthesised tuples
+          const tupleRe = /\(([^)]+)\)/g;
+          let m;
+          const found = [];
+          while ((m = tupleRe.exec(raw)) !== null) {
+            const parts = m[1].split(',').map(s => s.trim());
+            if (parts.length !== arity) {
+              extError = `Tuple (${m[1]}) has ${parts.length} elements but ${pred} has arity ${arity}.`;
+              return;
+            }
+            found.push(parts);
+          }
+          // Also accept bare comma-pairs for arity 2 like "a b, c d"
+          if (found.length === 0 && arity === 2) {
+            raw.split(',').forEach(pair => {
+              const parts = pair.trim().split(/\s+/);
+              if (parts.length === 2) found.push(parts);
+            });
+          }
+          found.forEach(t => extSet.add(JSON.stringify(t)));
+        }
+        model.ext[pred] = extSet;
+      }
+      // Verify extension elements are in domain
+      model.ext[pred].forEach(elem => {
+        const el = typeof elem === 'string' ? elem : elem;
+        // For arity-1 check element in domain; tuples checked elementwise
+        if (arity === 1 && !model.domain.includes(el)) {
+          if (model.domain.length > 0)
+            extError = extError || `'${el}' is not in the domain {${model.domain.join(', ')}}.`;
+        }
+      });
+    });
+
+    if (extError) { showResult(box, false, extError, null); return; }
+
+    // Free variable values
+    satAtoms.freeVars.forEach(v => {
+      const inp = document.getElementById('sat-var-' + v);
+      model.vars[v] = inp ? inp.value.trim() : v;
+    });
+
+    // Evaluate
+    const result = satEval(satNode, model);
+    if (result === null) { showResult(box, false, 'Could not evaluate formula under this assignment.', null); return; }
+
+    // Search for tautology/contingent/contradiction
+    let verdict = null;
+    if (!satIsFOL) {
+      const allKeys = [
+        ...[...satAtoms.props],
+        ...[...satAtoms.linerefs]
+      ];
+      if (allKeys.length <= 14) verdict = satSearchPropositional(satNode, allKeys);
+    } else {
+      const v = satSearchFOL(satNode, satAtoms, model.domain);
+      verdict = v === 'unknown' ? null : v;
+    }
+
+    showResult(box, result, null, verdict);
+  }
+
+  function showResult(box, resultOrMsg, errorMsg, verdict) {
+    box.innerHTML = '';
+    if (errorMsg) {
+      box.className = 'sat-result-box info';
+      box.textContent = errorMsg;
+      return;
+    }
+    box.className = 'sat-result-box ' + (resultOrMsg ? 'true' : 'false');
+    const evalLine = document.createElement('div');
+    evalLine.textContent = resultOrMsg
+      ? '✓ The formula is TRUE under this assignment.'
+      : '✗ The formula is FALSE under this assignment.';
+    box.appendChild(evalLine);
+
+    if (verdict) {
+      const vLine = document.createElement('div');
+      vLine.className = 'sat-verdict ' + verdict;
+      const labels = {
+        tautology:     '◆ Tautology — true under every possible assignment.',
+        contradiction: '◆ Contradiction — false under every possible assignment.',
+        contingent:    '◆ Contingent — true under some assignments, false under others.'
+      };
+      vLine.textContent = labels[verdict] || '';
+      box.appendChild(vLine);
+    }
+  }
+
+})();
 
 // Init
 render();
