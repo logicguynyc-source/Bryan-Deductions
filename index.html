@@ -2426,7 +2426,7 @@ function render() {
     tbody.appendChild(tr);
 
     // Inline certification strip (expands below the assumption row)
-    if (row.type === 'assumption' && openCertifyIdx === idx) {
+    if (row.type === 'assumption' && openCertifyIdx === idx && row.formula) {
       const certTr = buildCertifyRow(idx, 5);
       tbody.appendChild(certTr);
     }
@@ -2466,6 +2466,7 @@ function addLineAfter(idx) {
 
 function addSubproofAfter(idx) {
   snapshot();
+  openCertifyIdx = null;
   const depth = currentDepthAt(idx) + 1;
   // Insert assumption line
   proof.splice(idx + 1, 0, {
@@ -3632,7 +3633,7 @@ function buildCertifyRow(idx, colSpan) {
   const node = parse(row.formula);
   const atoms = row._certAtoms || { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
   const isFOL = row._certIsFOL || false;
-  const formula = node ? unparse(node) : row.formula;
+  const formula = row.formula;  // show exactly what the student typed
 
   const tr = document.createElement('tr');
   tr.className = 'certify-inline-tr';
