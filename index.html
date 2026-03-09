@@ -2353,6 +2353,4106 @@ function render() {
       justInput.value = 'As';
       justInput.className += ' premise-label';
       justInput.readOnly = true;
+    } else {
+      justInput.value = row.justification;
+      justInput.placeholder = 'e.g. →E 1,2';
+      justInput.addEventListener('focus', () => lastFocused = justInput);
+      justInput.addEventListener('input', e => {
+        proof[idx].justification = e.target.value;
+        clearStatus();
+        scheduleSnapshot();
+      });
+    }
+    justTd.appendChild(justInput);
+    if (row.type === 'assumption' && row.falsifiabilityVerified === true && row.falsifyingModel) {
+      const ann = document.createElement('div');
+      ann.title = 'Falsifying interpretation';
+      ann.style.cssText = 'font-size:.72rem;color:#1a6e2e;font-family:var(--mono);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;';
+      ann.textContent = formatFalsifyingModel(row.falsifyingModel);
+      justTd.appendChild(ann);
+    }
+
+    // Actions
+    const actTd = document.createElement('td');
+    actTd.className = 'td-actions';
+
+    // + line below
+    const addLineBtn = document.createElement('button');
+    addLineBtn.textContent = '+line';
+    addLineBtn.title = 'Add a new line below this one';
+    addLineBtn.addEventListener('click', () => addLineAfter(idx));
+    actTd.appendChild(addLineBtn);
+
+    // + subproof
+    const addSubBtn = document.createElement('button');
+    addSubBtn.textContent = '+sub';
+    addSubBtn.title = 'Open a new subproof below this line';
+    addSubBtn.addEventListener('click', () => addSubproofAfter(idx));
+    actTd.appendChild(addSubBtn);
+
+    // close subproof (only if inside one)
+    if (row.depth > 0) {
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = '↩';
+      closeBtn.title = 'Add a line closing this subproof (back to parent depth)';
+      closeBtn.addEventListener('click', () => closeSubproofAfter(idx));
+      actTd.appendChild(closeBtn);
+    }
+
+    // 🔒 Certify button for uncertified assumptions
+    if (row.type === 'assumption' && row.formula) {
+      const lockBtn = document.createElement('button');
+      lockBtn.className = 'certify-lock-btn';
+      if (row.falsifiabilityVerified === true) {
+        lockBtn.textContent = '✓';
+        lockBtn.className += ' ok';
+        lockBtn.title = 'Assumption certified (falsifiable)';
+        lockBtn.disabled = true;
+      } else {
+        lockBtn.textContent = '🔒';
+        lockBtn.className += ' pending';
+        lockBtn.title = 'Certify this assumption is falsifiable';
+        lockBtn.addEventListener('click', () => {
+          triggerAssumptionCertification(idx);
+        });
+      }
+      actTd.appendChild(lockBtn);
+    }
+
+    // delete (not premises)
+    if (row.type !== 'premise') {
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '×';
+      delBtn.title = 'Delete this line';
+      delBtn.className = 'del-btn';
+      delBtn.addEventListener('click', () => deleteLine(idx));
+      actTd.appendChild(delBtn);
+    }
+
+    tr.append(numTd, depthTd, formTd, justTd, actTd);
+    tbody.appendChild(tr);
+
+    // Inline certification strip (expands below the assumption row)
+    if (row.type === 'assumption' && openCertifyIdx === idx && row.formula) {
+      const certTr = buildCertifyRow(idx, 5);
+      tbody.appendChild(certTr);
+    }
+  });
+}
+
+function clearStatus() {
+  const st = document.getElementById('proofStatus');
+  st.className = 'proof-status';
+  st.textContent = '';
+  // Clear line colors
+  document.querySelectorAll('.formula-input').forEach(el => {
+    el.classList.remove('valid','invalid');
+  });
+  document.querySelectorAll('.just-input:not(.premise-label)').forEach(el => {
+    el.classList.remove('valid','invalid');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROOF MUTATIONS
+// ═══════════════════════════════════════════════════════════════
+function currentDepthAt(idx) {
+  return proof[idx] ? proof[idx].depth : 0;
+}
+
+function addLineAfter(idx) {
+  snapshot();
+  const depth = currentDepthAt(idx);
+  proof.splice(idx + 1, 0, {
+    id: mkId(), type: 'step', formula: '', justification: '', depth, status: null
+  });
+  render();
+  focusRow(idx + 1, 'formula');
+  clearStatus();
+}
+
+function addSubproofAfter(idx) {
+  snapshot();
+  openCertifyIdx = null;
+  const depth = currentDepthAt(idx) + 1;
+  // Insert assumption line
+  proof.splice(idx + 1, 0, {
+    id: mkId(), type: 'assumption', formula: '', justification: 'As', depth, status: null, falsifiabilityVerified: null
+  });
+  // Insert one step inside
+  proof.splice(idx + 2, 0, {
+    id: mkId(), type: 'step', formula: '', justification: '', depth, status: null
+  });
+  render();
+  focusRow(idx + 1, 'formula');
+  clearStatus();
+}
+
+function closeSubproofAfter(idx) {
+  snapshot();
+  const depth = Math.max(0, currentDepthAt(idx) - 1);
+  proof.splice(idx + 1, 0, {
+    id: mkId(), type: 'step', formula: '', justification: '', depth, status: null
+  });
+  render();
+  focusRow(idx + 1, 'formula');
+  clearStatus();
+}
+
+function deleteLine(idx) {
+  if (proof[idx].type === 'premise') return;
+  snapshot();
+  proof.splice(idx, 1);
+  render();
+  clearStatus();
+}
+
+function focusRow(idx, which) {
+  requestAnimationFrame(() => {
+    const rows = document.querySelectorAll('#fitchBody tr');
+    if (!rows[idx]) return;
+    const input = which === 'formula'
+      ? rows[idx].querySelector('.formula-input')
+      : rows[idx].querySelector('.just-input:not([readonly])');
+    if (input) { input.focus(); input.select(); }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETUP & CHECK
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('createProofBtn').addEventListener('click', () => {
+  const premStr = document.getElementById('premisesInput').value;
+  const concStr = document.getElementById('conclusionInput').value.trim();
+  if (!concStr) { alert('Please enter a conclusion.'); return; }
+
+  const premises = premStr.split(/[,;]/).map(s => preprocessInput(s)).filter(Boolean);
+  conclusionFormula = preprocessInput(concStr);
+
+  proof = [];
+  undoStack = [];
+  redoStack = [];
+  premises.forEach(p => {
+    proof.push({ id: mkId(), type: 'premise', formula: p, justification: 'Pr', depth: 0, status: null });
+  });
+  // Add one blank step to start
+  proof.push({ id: mkId(), type: 'step', formula: '', justification: '', depth: 0, status: null });
+
+  document.getElementById('conclusionDisplay').textContent = conclusionFormula;
+  document.getElementById('proofPanel').style.display = '';
+  document.getElementById('emptyPanel').style.display = 'none';
+  document.getElementById('clearProofBtn').style.display = '';
+  render();
+  clearStatus();
+  updateUndoUI();
+});
+
+document.getElementById('clearProofBtn').addEventListener('click', () => {
+  proof = [];
+  undoStack = [];
+  redoStack = [];
+  conclusionFormula = '';
+  document.getElementById('proofPanel').style.display = 'none';
+  document.getElementById('emptyPanel').style.display = '';
+  document.getElementById('clearProofBtn').style.display = 'none';
+  document.getElementById('premisesInput').value = '';
+  document.getElementById('conclusionInput').value = '';
+  clearStatus();
+  updateUndoUI();
+});
+
+document.getElementById('checkBtn').addEventListener('click', () => {
+  const results = checkProof();
+  const rows = document.querySelectorAll('#fitchBody tr');
+
+  let allOk = true;
+  let errors = [];
+
+  results.forEach((r, idx) => {
+    const row = rows[idx];
+    if (!row) return;
+    const fInput = row.querySelector('.formula-input');
+    const jInput = row.querySelector('.just-input');
+
+    fInput.classList.remove('valid','invalid');
+    if (jInput) jInput.classList.remove('valid','invalid');
+
+    if (r.ok) {
+      fInput.classList.add('valid');
+      if (jInput && !jInput.readOnly) jInput.classList.add('valid');
+    } else {
+      fInput.classList.add('invalid');
+      if (jInput && !jInput.readOnly) jInput.classList.add('invalid');
+      allOk = false;
+      errors.push(`Line ${idx+1}: ${r.msg}`);
+    }
+  });
+
+  // Check if last non-empty formula matches conclusion and is at top level (depth 0)
+  const stepsWithFormulas = proof.filter(r => r.formula.trim());
+  const lastStep = stepsWithFormulas.length ? stepsWithFormulas[stepsWithFormulas.length-1] : null;
+  const lastFormula = lastStep ? normalizeFormula(lastStep.formula) : '';
+  const concludes = formulasEqual(lastFormula, conclusionFormula);
+  const atTopLevel = lastStep ? lastStep.depth === 0 : false;
+
+  const st = document.getElementById('proofStatus');
+  if (allOk && concludes && atTopLevel) {
+    st.className = 'proof-status ok';
+    st.textContent = '✓ Proof is valid! The conclusion is established.';
+  } else if (allOk && concludes && !atTopLevel) {
+    st.className = 'proof-status incomplete';
+    st.textContent = `⚠ The conclusion appears on the last line, but it is inside an open subproof. Close all subproofs before the proof can be considered complete.`;
+  } else if (allOk && !concludes) {
+    st.className = 'proof-status incomplete';
+    st.textContent = `⚠ All rules applied correctly, but the last line (${lastFormula || 'empty'}) doesn't match the conclusion (${conclusionFormula}). Keep going!`;
+  } else {
+    st.className = 'proof-status fail';
+    st.textContent = '✗ Errors found: ' + errors.join(' | ');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SYMBOL BAR
+// ═══════════════════════════════════════════════════════════════
+
+// Track the last proof input that had focus, persisting across blur events
+// so symbol buttons can insert into it even after the click steals focus.
+let pinnedInput = null;
+
+document.addEventListener('focusin', e => {
+  if (e.target.classList.contains('formula-input') ||
+      (e.target.classList.contains('just-input') && !e.target.readOnly) ||
+      e.target.id === 'premisesInput' ||
+      e.target.id === 'conclusionInput' ||
+      e.target.id === 'satFormulaInput') {
+    pinnedInput = e.target;
+    lastFocused = e.target;
+  }
+});
+
+// Use mousedown (fires before blur) to prevent the symbol button click
+// from stealing focus away from the input field.
+document.getElementById('symBar').addEventListener('mousedown', e => {
+  const btn = e.target.closest('.sym-btn');
+  if (btn) e.preventDefault(); // stops the input from losing focus
+});
+
+document.getElementById('symBar').addEventListener('click', e => {
+  const btn = e.target.closest('.sym-btn');
+  if (!btn) return;
+  const sym = btn.dataset.sym;
+  const active = pinnedInput || lastFocused || document.querySelector('.formula-input');
+  if (active && (active.tagName === 'INPUT') && !active.readOnly) {
+    const s = active.selectionStart ?? active.value.length;
+    const end = active.selectionEnd ?? active.value.length;
+    active.value = active.value.slice(0, s) + sym + active.value.slice(end);
+    active.setSelectionRange(s + sym.length, s + sym.length);
+    active.focus();
+    active.dispatchEvent(new Event('input'));
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// RULES REFERENCE PANEL
+// ═══════════════════════════════════════════════════════════════
+const rulesList = document.getElementById('rulesList');
+let tflHeaderAdded = false;
+let folHeaderAdded = false;
+let truthHeaderAdded = false;
+RULES.forEach(rule => {
+  if (!rule.isFOL && !rule.isTruth && !tflHeaderAdded) {
+    const divider2 = document.createElement('div');
+    divider2.className = 'rule-section-divider rule-section-divider-tfl';
+    divider2.textContent = 'Truth-Functional Logic';
+    rulesList.appendChild(divider2);
+    tflHeaderAdded = true;
+  }
+  // Insert section divider before FOL rules
+  if (rule.isFOL && !folHeaderAdded) {
+    const divider = document.createElement('div');
+    divider.className = 'rule-section-divider rule-section-divider-fol';
+    divider.textContent = 'First-Order Logic';
+    rulesList.appendChild(divider);
+    folHeaderAdded = true;
+  }
+  // Insert section divider before Truth Theory rules
+  if (rule.isTruth && !truthHeaderAdded) {
+    const divider3 = document.createElement('div');
+    divider3.className = 'rule-section-divider';
+    divider3.textContent = 'Truth Theory';
+    rulesList.appendChild(divider3);
+    truthHeaderAdded = true;
+  }
+  const item = document.createElement('div');
+  item.className = 'rule-item';
+  item.innerHTML = `
+    <span class="rule-name">${rule.name}</span>
+    <span class="rule-key">${rule.abbr}</span>
+    <span class="rule-snippet">${rule.form}</span>
+  `;
+  const detail = document.createElement('div');
+  detail.className = 'rule-detail';
+  detail.innerHTML = `<div class="rd-form">${rule.form}</div>${rule.desc}`;
+  item.addEventListener('click', () => {
+    const wasOpen = detail.classList.contains('open');
+    document.querySelectorAll('.rule-detail.open').forEach(d => d.classList.remove('open'));
+    if (!wasOpen) detail.classList.add('open');
+  });
+  rulesList.appendChild(item);
+  rulesList.appendChild(detail);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════════
+
+// Debounced snapshot for text edits — fires 800ms after user stops typing
+let snapshotTimer = null;
+function scheduleSnapshot() {
+  if (snapshotTimer) clearTimeout(snapshotTimer);
+  snapshotTimer = setTimeout(() => {
+    snapshot();
+    snapshotTimer = null;
+  }, 800);
+}
+
+document.getElementById('undoBtn').addEventListener('click', undo);
+document.getElementById('redoBtn').addEventListener('click', redo);
+
+document.addEventListener('keydown', e => {
+  // Ctrl+Z → undo
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    undo();
+    return;
+  }
+  // Ctrl+Y or Ctrl+Shift+Z → redo
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+    e.preventDefault();
+    redo();
+    return;
+  }
+  // Tab from formula → justification in same row
+  if (e.key === 'Tab' && !e.shiftKey && lastFocused?.classList.contains('formula-input')) {
+    e.preventDefault();
+    const tr = lastFocused.closest('tr');
+    if (!tr) return;
+    const just = tr.querySelector('.just-input:not([readonly])');
+    if (just) { just.focus(); just.select(); }
+  }
+  // Enter from justification → add new line
+  if (e.key === 'Enter' && lastFocused?.classList.contains('just-input')) {
+    e.preventDefault();
+    const tr = lastFocused.closest('tr');
+    if (!tr) return;
+    const idx = parseInt(tr.dataset.idx);
+    addLineAfter(idx);
+  }
+});
+
+function runDevSelfTests() {
+  function runScriptedProofTest(testCase) {
+    const scriptedProof = [];
+    testCase.premises.forEach(p => {
+      scriptedProof.push({
+        type: 'premise',
+        formula: preprocessInput(p),
+        justification: 'Pr',
+        depth: 0
+      });
+    });
+    testCase.lines.forEach(line => {
+      const isAssumption = line.type === 'assumption';
+      scriptedProof.push({
+        type: isAssumption ? 'assumption' : 'step',
+        formula: preprocessInput(line.formula),
+        justification: isAssumption ? 'As' : (line.justification || ''),
+        depth: line.depth
+      });
+    });
+
+    const lineFailures = [];
+    scriptedProof.forEach((_, idx) => {
+      const r = checkLine(scriptedProof, idx);
+      if (!r.ok) lineFailures.push(`L${idx + 1}: ${r.msg}`);
+    });
+
+    const nonEmpty = scriptedProof.filter(r => (r.formula || '').trim());
+    const lastStep = nonEmpty.length ? nonEmpty[nonEmpty.length - 1] : null;
+    const lastFormula = lastStep ? normalizeFormula(lastStep.formula) : '';
+    const concludes = formulasEqual(lastFormula, preprocessInput(testCase.conclusion));
+    const atTopLevel = lastStep ? lastStep.depth === 0 : false;
+
+    if (lineFailures.length) {
+      return { ok: false, details: lineFailures.join(' | ') };
+    }
+    if (!concludes) {
+      return {
+        ok: false,
+        details: `last line "${lastFormula || '∅'}" does not match conclusion "${preprocessInput(testCase.conclusion)}"`
+      };
+    }
+    if (!atTopLevel) {
+      return {
+        ok: false,
+        details: `conclusion reached at depth ${lastStep.depth} (inside open subproof), not at top level`
+      };
+    }
+    return { ok: true, details: '' };
+  }
+
+  const tests = [
+    {
+      name: 'ASCII v normalizes to disjunction',
+      ok: normalizeFormula('P v Q') === 'P ∨ Q'
+    },
+    {
+      name: 'Parenthesized quantified disjunction parses as top-level ∨',
+      ok: parse('((∀x Dx)∨(¬∀x Dx))')?.type === '∨'
+    },
+    {
+      name: 'Contradictory quantified pair recognized',
+      ok: formulasEqual(parse('((∀x Dx)∨(¬∀x Dx))'), parse('((∀x Dx)∨(¬∀x Dx))'))
+        && formulasEqual(parse('¬((∀x Dx)∨(¬∀x Dx))')?.sub, parse('((∀x Dx)∨(¬∀x Dx))'))
+    },
+    {
+      name: 'No self/forward reference enforced',
+      ok: (() => {
+        const fakeProof = [
+          { type: 'premise', formula: 'P', justification: 'Pr', depth: 0 },
+          { type: 'step', formula: 'P', justification: 'R 2', depth: 0 }
+        ];
+        const r = checkLine(fakeProof, 1);
+        return r && r.ok === false && /no self or forward references/i.test(r.msg || '');
+      })()
+    }
+  ];
+
+  const classicProblems = [
+    {
+      name: "Peirce's Law",
+      premises: [],
+      conclusion: '((P → Q) → P) → P',
+      expectedValid: true
+    },
+    {
+      name: 'Exportation / Currying',
+      premises: ['P → (Q → R)'],
+      conclusion: '(P ∧ Q) → R',
+      expectedValid: true
+    },
+    {
+      name: 'Consequentia Mirabilis',
+      premises: [],
+      conclusion: '(¬P → P) → P',
+      expectedValid: true
+    },
+    {
+      name: 'Disjunctive Syllogism Lookalike',
+      premises: ['P ∨ Q', '¬P ∨ R'],
+      conclusion: 'Q ∨ R',
+      expectedValid: true
+    },
+    {
+      name: 'Hypothetical Syllogism with Twist',
+      premises: ['P → Q', '¬P → Q'],
+      conclusion: 'Q',
+      expectedValid: true
+    },
+    {
+      name: 'Invalid Affirming the Consequent',
+      premises: ['P → Q', 'Q'],
+      conclusion: 'P',
+      expectedValid: false,
+      countermodel: { P: false, Q: true }
+    },
+    {
+      name: 'De Morgan Stretch',
+      premises: ['¬(P ∨ Q)'],
+      conclusion: '¬P ∧ ¬Q',
+      expectedValid: true
+    },
+    {
+      name: 'Distribution Trap',
+      premises: ['P → (Q ∨ R)'],
+      conclusion: '(P → Q) ∨ (P → R)',
+      expectedValid: true
+    },
+    {
+      name: 'Invalid Near-Miss of Modus Tollens',
+      premises: ['P → Q', '¬Q → R', 'R'],
+      conclusion: '¬P',
+      expectedValid: false,
+      countermodel: { P: true, Q: true, R: true }
+    },
+    {
+      name: 'Double Negation of Excluded Middle',
+      premises: [],
+      conclusion: '¬¬(P ∨ ¬P)',
+      expectedValid: true
+    }
+  ];
+
+  classicProblems.forEach((problem, i) => {
+    const result = checkPropositionalEntailment(problem.premises, problem.conclusion);
+    let ok = result.supported && result.valid === problem.expectedValid;
+    let details = '';
+
+    if (!result.supported) {
+      details = result.reason || 'unsupported formula class';
+    } else if (problem.expectedValid && !result.valid) {
+      details = `unexpected counterexample: ${JSON.stringify(result.counterexample)}`;
+    } else if (!problem.expectedValid && result.valid) {
+      details = 'expected invalid but semantics says valid';
+    }
+
+    if (ok && problem.countermodel) {
+      const premisesTrue = problem.premises.every(p => evaluatePropositionalFormula(p, problem.countermodel) === true);
+      const conclusionFalse = evaluatePropositionalFormula(problem.conclusion, problem.countermodel) === false;
+      ok = premisesTrue && conclusionFalse;
+      if (!ok) details = `provided countermodel failed check: ${JSON.stringify(problem.countermodel)}`;
+    }
+
+    tests.push({
+      name: `Classic problem ${i + 1}: ${problem.name}`,
+      ok,
+      details
+    });
+  });
+
+  const scriptedProofs = [
+    {
+      name: "Scripted proof: Peirce's Law",
+      premises: [],
+      conclusion: '((P → Q) → P) → P',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '(P → Q) → P' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { type: 'assumption', depth: 3, formula: 'P' },
+        { depth: 3, formula: '⊥', justification: '⊥I 2,3' },
+        { depth: 3, formula: 'Q', justification: 'X 4' },
+        { depth: 2, formula: 'P → Q', justification: '→I 3-5' },
+        { depth: 2, formula: 'P', justification: '→E 1,6' },
+        { depth: 2, formula: '⊥', justification: '⊥I 2,7' },
+        { depth: 1, formula: '¬¬P', justification: '¬I 2-8' },
+        { depth: 1, formula: 'P', justification: '¬E 9' },
+        { depth: 0, formula: '((P → Q) → P) → P', justification: '→I 1-10' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Exportation / Currying',
+      premises: ['P → (Q → R)'],
+      conclusion: '(P ∧ Q) → R',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P ∧ Q' },
+        { depth: 1, formula: 'P', justification: '∧E 2' },
+        { depth: 1, formula: 'Q', justification: '∧E 2' },
+        { depth: 1, formula: 'Q → R', justification: '→E 1,3' },
+        { depth: 1, formula: 'R', justification: '→E 4,5' },
+        { depth: 0, formula: '(P ∧ Q) → R', justification: '→I 2-6' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Consequentia Mirabilis',
+      premises: [],
+      conclusion: '(¬P → P) → P',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬P → P' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { depth: 2, formula: 'P', justification: '→E 1,2' },
+        { depth: 2, formula: '⊥', justification: '⊥I 2,3' },
+        { depth: 1, formula: '¬¬P', justification: '¬I 2-4' },
+        { depth: 1, formula: 'P', justification: '¬E 5' },
+        { depth: 0, formula: '(¬P → P) → P', justification: '→I 1-6' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Disjunctive Syllogism Lookalike',
+      premises: ['P ∨ Q', '¬P ∨ R'],
+      conclusion: 'Q ∨ R',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { depth: 2, formula: '⊥', justification: '⊥I 3,4' },
+        { depth: 2, formula: 'Q ∨ R', justification: 'X 5' },
+        { type: 'assumption', depth: 2, formula: 'R' },
+        { depth: 2, formula: 'Q ∨ R', justification: '∨I 7' },
+        { depth: 1, formula: 'Q ∨ R', justification: '∨E 2,6,8' },
+        { type: 'assumption', depth: 1, formula: 'Q' },
+        { depth: 1, formula: 'Q ∨ R', justification: '∨I 10' },
+        { depth: 0, formula: 'Q ∨ R', justification: '∨E 1,9,11' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Hypothetical Syllogism with Twist',
+      premises: ['P → Q', '¬P → Q'],
+      conclusion: 'Q',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬Q' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { depth: 2, formula: 'Q', justification: '→E 2,4' },
+        { depth: 2, formula: '⊥', justification: '⊥I 3,5' },
+        { depth: 1, formula: 'P', justification: 'IP 4-6' },
+        { depth: 1, formula: 'Q', justification: '→E 1,7' },
+        { depth: 1, formula: '⊥', justification: '⊥I 3,8' },
+        { depth: 0, formula: '¬¬Q', justification: '¬I 3-9' },
+        { depth: 0, formula: 'Q', justification: '¬E 10' }
+      ]
+    },
+    {
+      name: 'Scripted proof: De Morgan Stretch',
+      premises: ['¬(P ∨ Q)'],
+      conclusion: '¬P ∧ ¬Q',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P' },
+        { depth: 1, formula: 'P ∨ Q', justification: '∨I 2' },
+        { depth: 1, formula: '⊥', justification: '⊥I 1,3' },
+        { depth: 0, formula: '¬P', justification: '¬I 2-4' },
+        { type: 'assumption', depth: 1, formula: 'Q' },
+        { depth: 1, formula: 'P ∨ Q', justification: '∨I 6' },
+        { depth: 1, formula: '⊥', justification: '⊥I 1,7' },
+        { depth: 0, formula: '¬Q', justification: '¬I 6-8' },
+        { depth: 0, formula: '¬P ∧ ¬Q', justification: '∧I 5,9' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Distribution Trap',
+      premises: ['P → (Q ∨ R)'],
+      conclusion: '(P → Q) ∨ (P → R)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬((P → Q) ∨ (P → R))' },
+        { type: 'assumption', depth: 2, formula: '¬P' },
+        { type: 'assumption', depth: 3, formula: 'P' },
+        { depth: 3, formula: '⊥', justification: '⊥I 3,4' },
+        { depth: 3, formula: 'Q', justification: 'X 5' },
+        { depth: 2, formula: 'P → Q', justification: '→I 4-6' },
+        { depth: 2, formula: '(P → Q) ∨ (P → R)', justification: '∨I 7' },
+        { depth: 2, formula: '⊥', justification: '⊥I 2,8' },
+        { depth: 1, formula: '¬¬P', justification: '¬I 3-9' },
+        { depth: 1, formula: 'P', justification: '¬E 10' },
+        { type: 'assumption', depth: 2, formula: 'Q' },
+        { type: 'assumption', depth: 3, formula: 'P' },
+        { depth: 3, formula: 'Q', justification: 'R 12' },
+        { depth: 2, formula: 'P → Q', justification: '→I 13-14' },
+        { depth: 2, formula: '(P → Q) ∨ (P → R)', justification: '∨I 15' },
+        { depth: 2, formula: '⊥', justification: '⊥I 2,16' },
+        { depth: 1, formula: '¬Q', justification: '¬I 12-17' },
+        { depth: 1, formula: 'Q ∨ R', justification: '→E 1,11' },
+        { type: 'assumption', depth: 2, formula: 'Q' },
+        { depth: 2, formula: '⊥', justification: '⊥I 18,20' },
+        { depth: 2, formula: 'R', justification: 'X 21' },
+        { type: 'assumption', depth: 2, formula: 'R' },
+        { depth: 2, formula: 'R', justification: 'R 23' },
+        { depth: 1, formula: 'R', justification: '∨E 19,22,24' },
+        { type: 'assumption', depth: 2, formula: 'P' },
+        { depth: 2, formula: 'R', justification: 'R 25' },
+        { depth: 1, formula: 'P → R', justification: '→I 26-27' },
+        { depth: 1, formula: '(P → Q) ∨ (P → R)', justification: '∨I 28' },
+        { depth: 1, formula: '⊥', justification: '⊥I 2,29' },
+        { depth: 0, formula: '¬¬((P → Q) ∨ (P → R))', justification: '¬I 2-30' },
+        { depth: 0, formula: '(P → Q) ∨ (P → R)', justification: '¬E 31' }
+      ]
+    },
+    {
+      name: 'Scripted proof: Double Negation of Excluded Middle',
+      premises: [],
+      conclusion: '¬¬(P ∨ ¬P)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬(P ∨ ¬P)' },
+        { type: 'assumption', depth: 2, formula: 'P' },
+        { depth: 2, formula: 'P ∨ ¬P', justification: '∨I 2' },
+        { depth: 2, formula: '⊥', justification: '⊥I 1,3' },
+        { depth: 1, formula: '¬P', justification: '¬I 2-4' },
+        { depth: 1, formula: 'P ∨ ¬P', justification: '∨I 5' },
+        { depth: 1, formula: '⊥', justification: '⊥I 1,6' },
+        { depth: 0, formula: '¬¬(P ∨ ¬P)', justification: '¬I 1-7' }
+      ]
+    }
+  ];
+
+  scriptedProofs.forEach(script => {
+    const r = runScriptedProofTest(script);
+    tests.push({ name: script.name, ok: r.ok, details: r.details });
+  });
+
+  const folSemanticChecks = [
+    {
+      name: 'FOL invalid trap #5 countermodel sanity (quantifier swap)',
+      ok: (() => {
+        const domain = [0, 1];
+        const R = (x, y) => x === y;
+        const premiseTrue = domain.every(y => domain.some(x => R(x, y))); // ∀y∃x Rxy
+        const conclusionTrue = domain.some(x => domain.every(y => R(x, y))); // ∃x∀y Rxy
+        return premiseTrue === true && conclusionTrue === false;
+      })()
+    },
+    {
+      name: 'FOL invalid trap #11 countermodel sanity (witness merging)',
+      ok: (() => {
+        const domain = [1, 2];
+        const P = x => x === 1;
+        const Q = x => x === 2;
+        const premise1 = domain.some(x => P(x)); // ∃x Px
+        const premise2 = domain.some(x => Q(x)); // ∃x Qx
+        const conclusion = domain.some(x => P(x) && Q(x)); // ∃x (Px ∧ Qx)
+        return premise1 === true && premise2 === true && conclusion === false;
+      })()
+    }
+  ];
+  folSemanticChecks.forEach(t => tests.push(t));
+
+  const folScriptedProofs = [
+    {
+      name: 'FOL #1 Universal Instantiation Trap',
+      premises: ['∀x (P(x) → Q(x))', 'P(a)'],
+      conclusion: 'Q(a)',
+      lines: [
+        { depth: 0, formula: 'P(a) → Q(a)', justification: '∀E 1 [x/a]' },
+        { depth: 0, formula: 'Q(a)', justification: '→E 3,2' }
+      ]
+    },
+    {
+      name: 'FOL #2 Existential from Universal',
+      premises: ['∀x P(x)'],
+      conclusion: '∃x P(x)',
+      lines: [
+        { depth: 0, formula: 'P(a)', justification: '∀E 1 [x/a]' },
+        { depth: 0, formula: '∃x P(x)', justification: '∃I 2 [a/x]' }
+      ]
+    },
+    {
+      name: 'FOL #3 Vacuous Universal',
+      premises: [],
+      conclusion: '∀x (P(x) → P(x))',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P(a)' },
+        { depth: 1, formula: 'P(a)', justification: 'R 1' },
+        { depth: 0, formula: 'P(a) → P(a)', justification: '→I 1-2' },
+        { depth: 0, formula: '∀x (P(x) → P(x))', justification: '∀I 3 [a/x]' }
+      ]
+    },
+    {
+      name: 'FOL #4 Swapping Quantifiers valid direction',
+      premises: ['∃x ∀y R(x,y)'],
+      conclusion: '∀y ∃x R(x,y)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '∀y R(a,y)' },
+        { depth: 1, formula: 'R(a,b)', justification: '∀E 2 [y/b]' },
+        { depth: 1, formula: '∃x R(x,b)', justification: '∃I 3 [a/x]' },
+        { depth: 1, formula: '∀y ∃x R(x,y)', justification: '∀I 4 [b/y]' },
+        { depth: 0, formula: '∀y ∃x R(x,y)', justification: '∃E 1 2-5' }
+      ]
+    },
+    {
+      name: 'FOL #6 Negation with Existential',
+      premises: ['¬∃x P(x)'],
+      conclusion: '∀x ¬P(x)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P(a)' },
+        { depth: 1, formula: '∃x P(x)', justification: '∃I 2 [a/x]' },
+        { depth: 1, formula: '⊥', justification: '⊥I 1,3' },
+        { depth: 0, formula: '¬P(a)', justification: '¬I 2-4' },
+        { depth: 0, formula: '∀x ¬P(x)', justification: '∀I 5 [a/x]' }
+      ]
+    },
+    {
+      name: 'FOL #7 Converse direction',
+      premises: ['∀x ¬P(x)'],
+      conclusion: '¬∃x P(x)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '∃x P(x)' },
+        { type: 'assumption', depth: 2, formula: 'P(a)' },
+        { depth: 2, formula: '¬P(a)', justification: '∀E 1 [x/a]' },
+        { depth: 2, formula: '⊥', justification: '⊥I 3,4' },
+        { depth: 1, formula: '⊥', justification: '∃E 2 3-5' },
+        { depth: 0, formula: '¬∃x P(x)', justification: '¬I 2-6' }
+      ]
+    },
+    {
+      name: 'FOL #8 Barcan-style trap (valid)',
+      premises: ['∀x (P(x) → Q)'],
+      conclusion: '(∃x P(x)) → Q',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '∃x P(x)' },
+        { type: 'assumption', depth: 2, formula: 'P(a)' },
+        { depth: 2, formula: 'P(a) → Q', justification: '∀E 1 [x/a]' },
+        { depth: 2, formula: 'Q', justification: '→E 4,3' },
+        { depth: 1, formula: 'Q', justification: '∃E 2 3-5' },
+        { depth: 0, formula: '(∃x P(x)) → Q', justification: '→I 2-6' }
+      ]
+    },
+    {
+      name: 'FOL #9 Russell-flavored near-miss',
+      premises: ['∀x (P(x) → ¬P(x))'],
+      conclusion: '¬∃x P(x)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '∃x P(x)' },
+        { type: 'assumption', depth: 2, formula: 'P(a)' },
+        { depth: 2, formula: 'P(a) → ¬P(a)', justification: '∀E 1 [x/a]' },
+        { depth: 2, formula: '¬P(a)', justification: '→E 4,3' },
+        { depth: 2, formula: '⊥', justification: '⊥I 3,5' },
+        { depth: 1, formula: '⊥', justification: '∃E 2 3-6' },
+        { depth: 0, formula: '¬∃x P(x)', justification: '¬I 2-7' }
+      ]
+    },
+    {
+      name: 'FOL #10 Leibniz identity trap',
+      premises: ['a = b', 'P(a)'],
+      conclusion: 'P(b)',
+      lines: [
+        { depth: 0, formula: 'P(b)', justification: '=E 1,2' }
+      ]
+    },
+    {
+      name: 'FOL #12 Quantifier duality classical direction',
+      premises: [],
+      conclusion: '¬∀x P(x) → ∃x ¬P(x)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: '¬∀x P(x)' },
+        { type: 'assumption', depth: 2, formula: '¬∃x ¬P(x)' },
+        { type: 'assumption', depth: 3, formula: '¬P(a)' },
+        { depth: 3, formula: '∃x ¬P(x)', justification: '∃I 3 [a/x]' },
+        { depth: 3, formula: '⊥', justification: '⊥I 2,4' },
+        { depth: 2, formula: '¬¬P(a)', justification: '¬I 3-5' },
+        { depth: 2, formula: 'P(a)', justification: '¬E 6' },
+        { depth: 2, formula: '∀x P(x)', justification: '∀I 7 [a/x]' },
+        { depth: 2, formula: '⊥', justification: '⊥I 1,8' },
+        { depth: 1, formula: '¬¬∃x ¬P(x)', justification: '¬I 2-9' },
+        { depth: 1, formula: '∃x ¬P(x)', justification: '¬E 10' },
+        { depth: 0, formula: '¬∀x P(x) → ∃x ¬P(x)', justification: '→I 1-11' }
+      ]
+    }
+  ];
+
+  folScriptedProofs.forEach(script => {
+    const r = runScriptedProofTest(script);
+    tests.push({ name: script.name, ok: r.ok, details: r.details });
+  });
+
+  // ── Truth Theory scripted proofs ──
+  const truthScriptedProofs = [
+    {
+      name: 'Truth #1: T-schema roundtrip (atomic)',
+      premises: ['P'],
+      conclusion: 'P',
+      lines: [
+        { depth: 0, formula: 'True(⌜P⌝)',  justification: 'TI 1' },
+        { depth: 0, formula: 'P',           justification: 'TE 2' }
+      ]
+    },
+    {
+      name: 'Truth #2: T-schema roundtrip (complex formula)',
+      premises: ['(P → Q) ∧ R'],
+      conclusion: '(P → Q) ∧ R',
+      lines: [
+        { depth: 0, formula: 'True(⌜(P → Q) ∧ R⌝)', justification: 'TI 1' },
+        { depth: 0, formula: '(P → Q) ∧ R',          justification: 'TE 2' }
+      ]
+    },
+    {
+      name: 'Truth #3: line-number reference roundtrip',
+      // Line 1: P ∨ Q (premise)
+      // Line 2: step — True(⌜1⌝)  via TI 1
+      // Line 3: step — P ∨ Q      via TE 2
+      premises: ['P ∨ Q'],
+      conclusion: 'P ∨ Q',
+      lines: [
+        { depth: 0, formula: 'True(⌜1⌝)', justification: 'TI 1' },
+        { depth: 0, formula: 'P ∨ Q',     justification: 'TE 2' }
+      ]
+    },
+    {
+      name: 'Truth #4 (regression): self-referential truth-teller must now fail',
+      _inline: () => {
+        // True(⌜3⌝) on line 3 (idx 2) with bare "TI" and no citation.
+        // The self-ref form has been removed, so this must be rejected.
+        const fakeProof = [
+          { type: 'premise', formula: 'P',         justification: 'Pr',  depth: 0 }, // idx 0
+          { type: 'step',    formula: 'True(⌜P⌝)', justification: 'TI 1', depth: 0 }, // idx 1
+          { type: 'step',    formula: 'True(⌜3⌝)', justification: 'TI',   depth: 0 }, // idx 2 — self-ref
+        ];
+        const r = checkLine(fakeProof, 2);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'self-referential True(⌜3⌝) with bare TI was incorrectly accepted after removal of that form' : ''
+        };
+      }
+    },
+    {
+      name: 'Truth #5: True(⌜¬φ⌝) → ¬True(⌜φ⌝)',
+      premises: ['True(⌜¬P⌝)'],
+      conclusion: '¬True(⌜P⌝)',
+      lines: [
+        { depth: 0, formula: '¬P',          justification: 'TE 1' },
+        { type: 'assumption', depth: 1, formula: 'True(⌜P⌝)' },
+        { depth: 1, formula: 'P',           justification: 'TE 3' },
+        { depth: 1, formula: '⊥',           justification: '⊥I 2,4' },
+        { depth: 0, formula: '¬True(⌜P⌝)', justification: '¬I 3-5' }
+      ]
+    },
+    {
+      name: 'Truth #6: ¬True(⌜φ⌝) → True(⌜¬φ⌝)',
+      premises: ['¬True(⌜P⌝)'],
+      conclusion: 'True(⌜¬P⌝)',
+      lines: [
+        { type: 'assumption', depth: 1, formula: 'P' },
+        { depth: 1, formula: 'True(⌜P⌝)', justification: 'TI 2' },
+        { depth: 1, formula: '⊥',          justification: '⊥I 1,3' },
+        { depth: 0, formula: '¬P',          justification: '¬I 2-4' },
+        { depth: 0, formula: 'True(⌜¬P⌝)', justification: 'TI 5' }
+      ]
+    },
+    {
+      name: 'Truth #7: True(⌜¬φ⌝) ↔ ¬True(⌜φ⌝) (full biconditional)',
+      premises: [],
+      conclusion: 'True(⌜¬P⌝) ↔ ¬True(⌜P⌝)',
+      lines: [
+        // → direction: assume True(⌜¬P⌝), derive ¬True(⌜P⌝)
+        { type: 'assumption', depth: 1, formula: 'True(⌜¬P⌝)' },
+        { depth: 1, formula: '¬P',           justification: 'TE 1' },
+        { type: 'assumption', depth: 2, formula: 'True(⌜P⌝)' },
+        { depth: 2, formula: 'P',            justification: 'TE 3' },
+        { depth: 2, formula: '⊥',            justification: '⊥I 2,4' },
+        { depth: 1, formula: '¬True(⌜P⌝)',  justification: '¬I 3-5' },
+        { depth: 0, formula: 'True(⌜¬P⌝) → ¬True(⌜P⌝)', justification: '→I 1-6' },
+        // ← direction: assume ¬True(⌜P⌝), derive True(⌜¬P⌝)
+        { type: 'assumption', depth: 1, formula: '¬True(⌜P⌝)' },
+        { type: 'assumption', depth: 2, formula: 'P' },
+        { depth: 2, formula: 'True(⌜P⌝)',   justification: 'TI 9' },
+        { depth: 2, formula: '⊥',            justification: '⊥I 8,10' },
+        { depth: 1, formula: '¬P',           justification: '¬I 9-11' },
+        { depth: 1, formula: 'True(⌜¬P⌝)',  justification: 'TI 12' },
+        { depth: 0, formula: '¬True(⌜P⌝) → True(⌜¬P⌝)', justification: '→I 8-13' },
+        { depth: 0, formula: 'True(⌜¬P⌝) ↔ ¬True(⌜P⌝)', justification: '↔I 7,14' }
+      ]
+    },
+    {
+      name: 'Truth #8: True distributes over ∧ (→ direction)',
+      premises: ['True(⌜P ∧ Q⌝)'],
+      conclusion: 'True(⌜P⌝) ∧ True(⌜Q⌝)',
+      lines: [
+        { depth: 0, formula: 'P ∧ Q',                  justification: 'TE 1' },
+        { depth: 0, formula: 'P',                       justification: '∧E 2' },
+        { depth: 0, formula: 'Q',                       justification: '∧E 2' },
+        { depth: 0, formula: 'True(⌜P⌝)',              justification: 'TI 3' },
+        { depth: 0, formula: 'True(⌜Q⌝)',              justification: 'TI 4' },
+        { depth: 0, formula: 'True(⌜P⌝) ∧ True(⌜Q⌝)', justification: '∧I 5,6' }
+      ]
+    },
+    // Regression: True(⌜n⌝) must NOT be licensed when line n is a discharged assumption
+    // that has not been re-established in the main proof.
+    // This proof mirrors the screenshot: p∧¬p assumed on line 1, discharged via ¬I,
+    // and then True(⌜1⌝) attempted — that step must be INVALID.
+    {
+      name: 'Truth #9 (regression): TI citing discharged assumption must fail',
+      premises: [],
+      conclusion: '⊥',
+      // We run checkLine directly on the offending step rather than via runScriptedProofTest,
+      // because runScriptedProofTest expects all lines to be valid.
+      // Instead we push a raw inline test that verifies the checker rejects the bad step.
+      _inline: () => {
+        const fakeProof = [
+          // Line 1 (idx 0): assumption p∧¬p  at depth 1
+          { type: 'assumption', formula: 'p∧¬p', justification: 'As', depth: 1 },
+          // Line 2 (idx 1): p  from ∧E
+          { type: 'step', formula: 'p',    justification: '∧E 1', depth: 1 },
+          // Line 3 (idx 2): ¬p from ∧E
+          { type: 'step', formula: '¬p',   justification: '∧E 1', depth: 1 },
+          // Line 4 (idx 3): ⊥  from ⊥I
+          { type: 'step', formula: '⊥',    justification: '⊥I 2,3', depth: 1 },
+          // Line 5 (idx 4): ¬(p∧¬p)  closes subproof at depth 0
+          { type: 'step', formula: '¬(p∧¬p)', justification: '¬I 1-4', depth: 0 },
+          // Line 6 (idx 5): True(⌜1⌝) — citing discharged assumption — MUST FAIL
+          { type: 'step', formula: 'True(⌜1⌝)', justification: 'TI 1', depth: 0 }
+        ];
+        const r = checkLine(fakeProof, 5);
+        return { ok: r.ok === false, details: r.ok ? 'checker incorrectly accepted True(⌜1⌝) citing a discharged assumption' : '' };
+      }
+    },
+
+    // ── Negative / overgeneration regression tests ──────────────────────────────
+    // Each test verifies that the checker REJECTS a proof step that should be
+    // invalid. The test passes (ok: true) only when the checker correctly rejects.
+
+    {
+      name: 'Negative #1: sibling-subproof line cannot be cited',
+      _inline: () => {
+        // Subproof A (lines 1-2, depth 1) is discharged at line 3 (depth 0) via →I.
+        // Subproof B starts at line 4 (depth 1). Line 5 tries to reiterate line 2,
+        // which lives inside the now-closed sibling subproof A. Must fail.
+        const fakeProof = [
+          { type: 'assumption', formula: 'P',     justification: 'As',    depth: 1 }, // idx 0
+          { type: 'step',       formula: 'P',     justification: 'R 1',   depth: 1 }, // idx 1 — inside A
+          { type: 'step',       formula: 'P → P', justification: '→I 1-2', depth: 0 }, // idx 2 — closes A
+          { type: 'assumption', formula: 'Q',     justification: 'As',    depth: 1 }, // idx 3 — start B
+          { type: 'step',       formula: 'P',     justification: 'R 2',   depth: 1 }, // idx 4 — cites idx 1 (closed A)
+        ];
+        const r = checkLine(fakeProof, 4);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'checker incorrectly accepted a reiteration from a closed sibling subproof' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #2: proof is not complete when conclusion is inside an open subproof',
+      _inline: () => {
+        // Every individual line is rule-correct, but the proof ends inside a depth-1
+        // subproof. A valid completed proof requires the conclusion at depth 0.
+        const fakeProof = [
+          { type: 'assumption', formula: 'P', justification: 'As',  depth: 1 }, // idx 0
+          { type: 'step',       formula: 'P', justification: 'R 1', depth: 1 }, // idx 1 — conclusion inside subproof
+        ];
+        const lineResults = fakeProof.map((_, i) => checkLine(fakeProof, i));
+        const allLinesOk = lineResults.every(r => r.ok);
+        const lastStep = fakeProof[fakeProof.length - 1];
+        const proofIsValid = allLinesOk && lastStep.depth === 0;
+        return {
+          ok: !proofIsValid,
+          details: proofIsValid ? 'incorrectly accepted a proof whose conclusion is only established inside an open subproof' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #3: TI with mismatched quoted formula must fail',
+      _inline: () => {
+        // Line 1 has P, but we try to introduce True(⌜Q⌝) — Q ≠ P.
+        const fakeProof = [
+          { type: 'premise', formula: 'P',         justification: 'Pr',   depth: 0 }, // idx 0
+          { type: 'step',    formula: 'True(⌜Q⌝)', justification: 'TI 1', depth: 0 }, // idx 1 — wrong
+        ];
+        const r = checkLine(fakeProof, 1);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'TI incorrectly accepted True(⌜Q⌝) when the cited line contains P (P ≠ Q)' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #4: TE producing wrong formula must fail',
+      _inline: () => {
+        // True(⌜P⌝) on line 1; TE should yield P, but we write Q instead.
+        const fakeProof = [
+          { type: 'premise', formula: 'True(⌜P⌝)', justification: 'Pr',   depth: 0 }, // idx 0
+          { type: 'step',    formula: 'Q',           justification: 'TE 1', depth: 0 }, // idx 1 — wrong
+        ];
+        const r = checkLine(fakeProof, 1);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'TE incorrectly accepted Q from True(⌜P⌝) (P ≠ Q)' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #5: ∧E applied to a disjunction must fail',
+      _inline: () => {
+        const fakeProof = [
+          { type: 'premise', formula: 'P ∨ Q', justification: 'Pr',   depth: 0 }, // idx 0
+          { type: 'step',    formula: 'P',      justification: '∧E 1', depth: 0 }, // idx 1 — wrong rule
+        ];
+        const r = checkLine(fakeProof, 1);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? '∧E incorrectly accepted on a disjunction (P ∨ Q)' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #6: ⊥I from a non-contradictory pair must fail',
+      _inline: () => {
+        // P and Q are not contradictory (neither is the negation of the other).
+        const fakeProof = [
+          { type: 'premise', formula: 'P', justification: 'Pr',      depth: 0 }, // idx 0
+          { type: 'premise', formula: 'Q', justification: 'Pr',      depth: 0 }, // idx 1
+          { type: 'step',    formula: '⊥', justification: '⊥I 1,2', depth: 0 }, // idx 2 — invalid
+        ];
+        const r = checkLine(fakeProof, 2);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? '⊥I incorrectly derived ⊥ from non-contradictory premises P and Q' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #7: assumption with forward lineref must fail',
+      _inline: () => {
+        // Line 1 (idx 0): assumption True(⌜3⌝) — references line 3, which doesn't exist yet.
+        // A subproof assumption cannot meaningfully claim something about a future line.
+        const fakeProof = [
+          { type: 'assumption', formula: 'True(⌜3⌝)', justification: 'As', depth: 1 }, // idx 0
+          { type: 'step',       formula: 'True(⌜3⌝)', justification: 'R 1', depth: 1 }, // idx 1
+        ];
+        const r = checkLine(fakeProof, 0);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'checker incorrectly accepted an assumption containing a forward lineref True(⌜3⌝) on line 1' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #8: premise with forward lineref must fail',
+      _inline: () => {
+        // A premise True(⌜5⌝) on line 1 references line 5, which is in the future.
+        const fakeProof = [
+          { type: 'premise', formula: 'True(⌜5⌝)', justification: 'Pr', depth: 0 }, // idx 0
+        ];
+        const r = checkLine(fakeProof, 0);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'checker incorrectly accepted a premise containing a forward lineref True(⌜5⌝) on line 1' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #9: forward lineref inside complex formula must fail',
+      _inline: () => {
+        // P ∧ True(⌜4⌝) on line 2 — the True(⌜4⌝) conjunct refers to line 4, beyond line 2.
+        const fakeProof = [
+          { type: 'premise', formula: 'P',              justification: 'Pr',   depth: 0 }, // idx 0
+          { type: 'step',    formula: 'P ∧ True(⌜4⌝)', justification: '???',  depth: 0 }, // idx 1
+        ];
+        const r = checkLine(fakeProof, 1);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'checker incorrectly accepted P ∧ True(⌜4⌝) on line 2 (forward ref to line 4)' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #10 (regression): self-referential TI must now be rejected',
+      _inline: () => {
+        // True(⌜3⌝) on line 3 (idx 2) with bare "TI" — self-ref form is no longer valid.
+        // The checker must reject it (not because it's a forward ref, but because
+        // self-referential truth claims are disallowed).
+        const fakeProof = [
+          { type: 'premise', formula: 'P',         justification: 'Pr',   depth: 0 }, // idx 0
+          { type: 'step',    formula: 'True(⌜P⌝)', justification: 'TI 1', depth: 0 }, // idx 1
+          { type: 'step',    formula: 'True(⌜3⌝)', justification: 'TI',   depth: 0 }, // idx 2 — self-ref
+        ];
+        const r = checkLine(fakeProof, 2);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'self-referential True(⌜3⌝) with bare TI was incorrectly accepted' : ''
+        };
+      }
+    }
+  ];
+
+  truthScriptedProofs.forEach(script => {
+    if (script._inline) {
+      const r = script._inline();
+      tests.push({ name: script.name, ok: r.ok, details: r.details });
+    } else {
+      const r = runScriptedProofTest(script);
+      tests.push({ name: script.name, ok: r.ok, details: r.details });
+    }
+  });
+
+  const failed = tests.filter(t => !t.ok);
+  if (failed.length) {
+    console.group('[ND self-test] Failed');
+    failed.forEach(t => console.warn('✗', t.name, t.details ? `— ${t.details}` : ''));
+    console.groupEnd();
+  } else {
+    console.info(`[ND self-test] Passed (${tests.length}/${tests.length})`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ASSUMPTION CERTIFICATION
+// ═══════════════════════════════════════════════════════════════
+
+function containsQuantifier(node) {
+  if (!node) return false;
+  if (node.type === '∀' || node.type === '∃') return true;
+  switch (node.type) {
+    case 'neg': return containsQuantifier(node.sub);
+    case '∧': case '∨': case '→': case '↔':
+      return containsQuantifier(node.left) || containsQuantifier(node.right);
+    case 'true':
+      return node.arg.type === 'quote' && containsQuantifier(node.arg.inner);
+    default: return false;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Produce a compact one-line summary of a falsifying model, e.g.:
+// propositional: "P:F, Q:T"
+// FOL:           "domain:{a,b}; F:{a}; x=a"
+function formatFalsifyingModel(model) {
+  const parts = [];
+  if (model.domain && model.domain.length > 0)
+    parts.push('domain:{' + model.domain.join(',') + '}');
+  Object.keys(model.props || {}).sort().forEach(k =>
+    parts.push(k + ':' + (model.props[k] ? 'T' : 'F')));
+  Object.keys(model.ext || {}).sort().forEach(pred => {
+    const ext = model.ext[pred];
+    const elems = ext instanceof Set ? [...ext] : [];
+    parts.push(pred + ':{' + elems.join(',') + '}');
+  });
+  Object.keys(model.vars || {}).sort().forEach(v =>
+    parts.push(v + '=' + model.vars[v]));
+  return parts.join('; ');
+}
+
+// openCertifyIdx holds the proof index whose inline strip is currently open (or null).
+let openCertifyIdx = null;
+
+// Called when the student blurs an assumption input that has a formula.
+// Validates WFF + detects propositional tautologies; sets proof row state; re-renders.
+function triggerAssumptionCertification(idx) {
+  const f = proof[idx].formula;
+  if (!f) return;
+  const node = parse(f);
+  if (!node) {
+    proof[idx].falsifiabilityVerified = false;
+    proof[idx].falsifiabilityError = 'Hold up! In the Bryan Deduction system, you can only use WFFs as assumptions.';
+    openCertifyIdx = null;
+    render();
+    return;
+  }
+  const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+  satCollectAtoms(node, atoms);
+  const isFOL = atoms.predicates.size > 0 || containsQuantifier(node) || atoms.freeVars.size > 0;
+
+  // Auto-check propositional tautology
+  if (!isFOL) {
+    const allKeys = [...atoms.props, ...atoms.linerefs];
+    if (allKeys.length <= 14) {
+      const negNode = { type: 'neg', sub: node };
+      if (satSearchPropositional(negNode, allKeys) === 'contradiction') {
+        proof[idx].falsifiabilityVerified = false;
+        proof[idx].falsifiabilityError =
+          'Hold up! "' + unparse(node) + '" is a tautology — in the Bryan Deduction system, you can only assume falsifiable statements.';
+        openCertifyIdx = null;
+        render();
+        return;
+      }
+    }
+  }
+
+  // WFF and not a tautology — mark needing certification; open inline strip
+  proof[idx].falsifiabilityVerified = false;
+  proof[idx].falsifiabilityError =
+    'Hold up! In the Bryan Deduction system, you can only assume falsifiable statements — use the 🔒 button to certify this assumption.';
+  proof[idx]._certAtoms = atoms;
+  proof[idx]._certIsFOL = isFOL;
+  openCertifyIdx = idx;
+  render();
+}
+
+// Build the inline certification strip <tr> for the assumption at `idx`.
+function buildCertifyRow(idx, colSpan) {
+  const row = proof[idx];
+  const node = parse(row.formula);
+  const atoms = row._certAtoms || { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+  const isFOL = row._certIsFOL || false;
+  const formula = row.formula;  // show exactly what the student typed
+
+  const tr = document.createElement('tr');
+  tr.className = 'certify-inline-tr';
+  const td = document.createElement('td');
+  td.colSpan = colSpan;
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'certify-inline-header';
+  hdr.innerHTML = 'To use <span class="certify-formula">' + escapeHtml(formula) +
+    '</span> as an assumption in the Bryan Deduction system, you must provide an interpretation under which it is <strong>FALSE</strong>:';
+  td.appendChild(hdr);
+
+  // Fields
+  const fieldsDiv = document.createElement('div');
+  fieldsDiv.className = 'certify-inline-fields';
+
+  if (isFOL) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.85rem';
+    const lbl = document.createElement('label'); lbl.textContent = 'Universe:';
+    const inp = document.createElement('input'); inp.type = 'text';
+    inp.id = 'certify-domain-' + idx; inp.placeholder = 'e.g. a, b';
+    inp.style.cssText = 'font-family:var(--mono);font-size:.85rem;padding:3px 6px;width:120px;border:1px solid var(--border);border-radius:4px';
+    wrap.appendChild(lbl); wrap.appendChild(inp);
+    fieldsDiv.appendChild(wrap);
+  }
+
+  const propList = [...atoms.props].sort();
+  propList.forEach(name => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
+    const lbl = document.createElement('label'); lbl.style.fontFamily = 'var(--mono)'; lbl.textContent = name + ':';
+    const sel = document.createElement('select'); sel.id = 'certify-tv-' + idx + '-' + name;
+    sel.style.cssText = 'font-size:.85rem;padding:2px 4px';
+    ['T','F'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    wrap.appendChild(lbl); wrap.appendChild(sel);
+    fieldsDiv.appendChild(wrap);
+  });
+
+  atoms.predicates.forEach((arity, pred) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
+    const lbl = document.createElement('label'); lbl.style.fontFamily = 'var(--mono)';
+    lbl.textContent = pred + (arity > 1 ? '/' + arity : '') + ':';
+    const inp = document.createElement('input'); inp.type = 'text';
+    inp.id = 'certify-ext-' + idx + '-' + pred;
+    inp.placeholder = arity === 1 ? 'e.g. a, b' : 'e.g. (a,b)';
+    inp.style.cssText = 'font-family:var(--mono);font-size:.85rem;padding:3px 6px;width:110px;border:1px solid var(--border);border-radius:4px';
+    wrap.appendChild(lbl); wrap.appendChild(inp);
+    fieldsDiv.appendChild(wrap);
+  });
+
+  const freeList = [...atoms.freeVars].sort();
+  freeList.forEach(v => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
+    const lbl = document.createElement('label'); lbl.style.fontFamily = 'var(--mono)';
+    lbl.textContent = v + ' =';
+    const inp = document.createElement('input'); inp.type = 'text';
+    inp.id = 'certify-var-' + idx + '-' + v;
+    inp.placeholder = 'element'; inp.style.cssText = 'font-family:var(--mono);font-size:.85rem;padding:3px 6px;width:70px;border:1px solid var(--border);border-radius:4px';
+    wrap.appendChild(lbl); wrap.appendChild(inp);
+    fieldsDiv.appendChild(wrap);
+  });
+
+  td.appendChild(fieldsDiv);
+
+  // Actions
+  const actDiv = document.createElement('div');
+  actDiv.className = 'certify-inline-actions';
+  const verifyBtn = document.createElement('button');
+  verifyBtn.className = 'btn btn-primary'; verifyBtn.textContent = 'Verify';
+  const resultSpan = document.createElement('span'); resultSpan.className = 'certify-result';
+
+  verifyBtn.addEventListener('click', () => {
+    const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+
+    if (isFOL) {
+      const rawDomain = (document.getElementById('certify-domain-' + idx)?.value || '').trim();
+      if (!rawDomain) { resultSpan.textContent = 'Please enter a universe of discourse.'; resultSpan.className = 'certify-result err'; return; }
+      model.domain = rawDomain.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    propList.forEach(name => {
+      const sel = document.getElementById('certify-tv-' + idx + '-' + name);
+      model.props[name] = sel ? sel.value === 'T' : false;
+    });
+
+    let extErr = null;
+    atoms.predicates.forEach((arity, pred) => {
+      if (extErr) return;
+      const inp = document.getElementById('certify-ext-' + idx + '-' + pred);
+      const raw = inp ? inp.value.trim() : '';
+      if (arity === 1) {
+        model.ext[pred] = new Set(raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []);
+      } else {
+        const extSet = new Set();
+        if (raw) {
+          const tupleRe = /\(([^)]+)\)/g; let m;
+          while ((m = tupleRe.exec(raw)) !== null) {
+            const parts = m[1].split(',').map(s => s.trim());
+            if (parts.length !== arity) { extErr = 'Tuple arity mismatch for ' + pred + '.'; return; }
+            extSet.add(JSON.stringify(parts));
+          }
+        }
+        model.ext[pred] = extSet;
+      }
+    });
+    if (extErr) { resultSpan.textContent = extErr; resultSpan.className = 'certify-result err'; return; }
+
+    freeList.forEach(v => {
+      const inp = document.getElementById('certify-var-' + idx + '-' + v);
+      model.vars[v] = inp ? inp.value.trim() : v;
+    });
+
+    if (!node) { resultSpan.textContent = 'Invalid formula.'; resultSpan.className = 'certify-result err'; return; }
+    const val = satEval(node, model);
+    if (val === null) { resultSpan.textContent = 'Could not evaluate — check inputs.'; resultSpan.className = 'certify-result err'; return; }
+    if (val === false) {
+      proof[idx].falsifiabilityVerified = true;
+      proof[idx].falsifiabilityError = null;
+      proof[idx].falsifyingModel = { props: model.props, ext: model.ext, vars: model.vars, domain: model.domain };
+      openCertifyIdx = null;
+      render();
+    } else {
+      resultSpan.textContent = '✗ Formula is TRUE here — try a different interpretation.';
+      resultSpan.className = 'certify-result err';
+    }
+  });
+
+  actDiv.appendChild(verifyBtn);
+  actDiv.appendChild(resultSpan);
+  td.appendChild(actDiv);
+  tr.appendChild(td);
+  return tr;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SATISFIABILITY CHECKER UI
+// ═══════════════════════════════════════════════════════════════
+
+(function () {
+
+  // --- Collapse/expand ---
+  let satOpen = true;
+  document.getElementById('satPanelHeader').addEventListener('click', () => {
+    satOpen = !satOpen;
+    document.getElementById('satBody').style.display = satOpen ? '' : 'none';
+    document.getElementById('satToggleIcon').textContent = satOpen ? '▼' : '▶';
+  });
+
+  // State
+  let satNode = null;       // parsed AST of the formula
+  let satAtoms = null;      // { props, predicates, freeVars, linerefs }
+  let satIsFOL = false;     // does formula contain predicates/quantifiers?
+
+  // --- Step 1: parse and display assignment inputs ---
+  document.getElementById('satParseBtn').addEventListener('click', buildAssignmentUI);
+  document.getElementById('satFormulaInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') buildAssignmentUI();
+  });
+
+  function buildAssignmentUI() {
+    const raw = document.getElementById('satFormulaInput').value.trim();
+    const msg = document.getElementById('satParseMsg');
+    const section = document.getElementById('satAssignSection');
+    document.getElementById('satResultBox').innerHTML = '';
+
+    if (!raw) { msg.textContent = ''; msg.className = 'sat-parse-msg'; section.style.display = 'none'; return; }
+
+    const normalized = preprocessInput(raw);
+    satNode = parse(normalized);
+
+    if (!satNode) {
+      msg.textContent = '✗ Not a well-formed formula.';
+      msg.className = 'sat-parse-msg err';
+      section.style.display = 'none';
+      return;
+    }
+
+    msg.textContent = '✓ Well-formed formula.';
+    msg.className = 'sat-parse-msg ok';
+
+    // Collect atoms
+    satAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+    satCollectAtoms(satNode, satAtoms);
+
+    satIsFOL = satAtoms.predicates.size > 0
+            || satNode && containsQuantifier(satNode)
+            || satAtoms.freeVars.size > 0;
+
+    // Domain section
+    const domainSection = document.getElementById('satDomainSection');
+    domainSection.style.display = satIsFOL ? '' : 'none';
+
+    // Propositional variables + linerefs
+    const propSection = document.getElementById('satPropSection');
+    const propGrid = document.getElementById('satPropGrid');
+    propGrid.innerHTML = '';
+    const propItems = [...satAtoms.props].sort();
+    const linerefItems = [...satAtoms.linerefs].sort((a,b)=>a-b);
+    if (propItems.length > 0 || linerefItems.length > 0) {
+      propItems.forEach(name => propGrid.appendChild(makeTVRow(name, name)));
+      linerefItems.forEach(n => propGrid.appendChild(makeTVRow('line-' + n, `line ${n}`)));
+      propSection.style.display = '';
+    } else {
+      propSection.style.display = 'none';
+    }
+
+    // Predicate extensions
+    const extSection = document.getElementById('satExtSection');
+    const extGrid = document.getElementById('satExtGrid');
+    extGrid.innerHTML = '';
+    if (satAtoms.predicates.size > 0) {
+      satAtoms.predicates.forEach((arity, pred) => {
+        extGrid.appendChild(makeExtRow(pred, arity));
+      });
+      extSection.style.display = '';
+    } else {
+      extSection.style.display = 'none';
+    }
+
+    // Free variable values
+    const varSection = document.getElementById('satVarSection');
+    const varGrid = document.getElementById('satVarGrid');
+    varGrid.innerHTML = '';
+    const freeVarList = [...satAtoms.freeVars].sort();
+    if (freeVarList.length > 0) {
+      freeVarList.forEach(v => varGrid.appendChild(makeFreeVarRow(v)));
+      varSection.style.display = '';
+    } else {
+      varSection.style.display = 'none';
+    }
+
+    section.style.display = '';
+  }
+
+  function makeTVRow(id, label) {
+    const div = document.createElement('div');
+    div.className = 'sat-assign-row';
+    const lbl = document.createElement('label');
+    lbl.textContent = label;
+    const sel = document.createElement('select');
+    sel.id = 'sat-tv-' + id;
+    ['T', 'F'].forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      sel.appendChild(o);
+    });
+    div.appendChild(lbl); div.appendChild(sel);
+    return div;
+  }
+
+  function makeExtRow(pred, arity) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sat-ext-row';
+    const lbl = document.createElement('label');
+    lbl.textContent = pred + (arity > 1 ? ' (arity ' + arity + ')' : '');
+    const col = document.createElement('div');
+    col.style.flex = '1';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.id = 'sat-ext-' + pred;
+    if (arity === 1) inp.placeholder = 'e.g.  a, b';
+    else             inp.placeholder = 'e.g.  (a,b), (b,c)';
+    const hint = document.createElement('div');
+    hint.className = 'sat-ext-hint';
+    hint.textContent = arity === 1
+      ? 'Comma-separated domain elements in the extension of ' + pred
+      : 'Comma-separated ' + arity + '-tuples in the extension of ' + pred;
+    col.appendChild(inp); col.appendChild(hint);
+    wrap.appendChild(lbl); wrap.appendChild(col);
+    return wrap;
+  }
+
+  function makeFreeVarRow(v) {
+    const div = document.createElement('div');
+    div.className = 'sat-assign-row';
+    const lbl = document.createElement('label');
+    lbl.textContent = v + '  =';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.id = 'sat-var-' + v;
+    inp.placeholder = 'domain element';
+    inp.style.width = '80px';
+    div.appendChild(lbl); div.appendChild(inp);
+    return div;
+  }
+
+  // --- Step 2: evaluate ---
+  document.getElementById('satEvalBtn').addEventListener('click', evaluate);
+
+  function evaluate() {
+    const box = document.getElementById('satResultBox');
+    box.innerHTML = '';
+    if (!satNode || !satAtoms) return;
+
+    // Build model
+    const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+
+    // Domain
+    if (satIsFOL) {
+      const rawDomain = document.getElementById('satDomainInput').value.trim();
+      if (!rawDomain) {
+        showResult(box, false, 'Please specify a universe of discourse.', null);
+        return;
+      }
+      model.domain = rawDomain.split(',').map(s => s.trim()).filter(Boolean);
+      if (model.domain.length === 0) {
+        showResult(box, false, 'Domain cannot be empty.', null);
+        return;
+      }
+    }
+
+    // Propositional vars
+    satAtoms.props.forEach(name => {
+      const sel = document.getElementById('sat-tv-' + name);
+      model.props[name] = sel ? sel.value === 'T' : false;
+    });
+
+    // Linerefs
+    satAtoms.linerefs.forEach(n => {
+      const sel = document.getElementById('sat-tv-line-' + n);
+      model.linerefs[n] = sel ? sel.value === 'T' : false;
+    });
+
+    // Predicate extensions
+    let extError = null;
+    satAtoms.predicates.forEach((arity, pred) => {
+      if (extError) return;
+      const inp = document.getElementById('sat-ext-' + pred);
+      const raw = inp ? inp.value.trim() : '';
+      if (arity === 1) {
+        model.ext[pred] = new Set(raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []);
+      } else {
+        // Parse tuples: (a,b),(c,d) or a,b — split on '),(' boundary
+        const extSet = new Set();
+        if (raw) {
+          // Find all parenthesised tuples
+          const tupleRe = /\(([^)]+)\)/g;
+          let m;
+          const found = [];
+          while ((m = tupleRe.exec(raw)) !== null) {
+            const parts = m[1].split(',').map(s => s.trim());
+            if (parts.length !== arity) {
+              extError = `Tuple (${m[1]}) has ${parts.length} elements but ${pred} has arity ${arity}.`;
+              return;
+            }
+            found.push(parts);
+          }
+          // Also accept bare comma-pairs for arity 2 like "a b, c d"
+          if (found.length === 0 && arity === 2) {
+            raw.split(',').forEach(pair => {
+              const parts = pair.trim().split(/\s+/);
+              if (parts.length === 2) found.push(parts);
+            });
+          }
+          found.forEach(t => extSet.add(JSON.stringify(t)));
+        }
+        model.ext[pred] = extSet;
+      }
+      // Verify extension elements are in domain
+      model.ext[pred].forEach(elem => {
+        const el = typeof elem === 'string' ? elem : elem;
+        // For arity-1 check element in domain; tuples checked elementwise
+        if (arity === 1 && !model.domain.includes(el)) {
+          if (model.domain.length > 0)
+            extError = extError || `'${el}' is not in the domain {${model.domain.join(', ')}}.`;
+        }
+      });
+    });
+
+    if (extError) { showResult(box, false, extError, null); return; }
+
+    // Free variable values
+    satAtoms.freeVars.forEach(v => {
+      const inp = document.getElementById('sat-var-' + v);
+      model.vars[v] = inp ? inp.value.trim() : v;
+    });
+
+    // Evaluate
+    const result = satEval(satNode, model);
+    if (result === null) { showResult(box, false, 'Could not evaluate formula under this assignment.', null); return; }
+
+    // Search for tautology/contingent/contradiction
+    let verdict = null;
+    if (!satIsFOL) {
+      const allKeys = [
+        ...[...satAtoms.props],
+        ...[...satAtoms.linerefs]
+      ];
+      if (allKeys.length <= 14) verdict = satSearchPropositional(satNode, allKeys);
+    } else {
+      const v = satSearchFOL(satNode, satAtoms, model.domain, model.vars);
+      verdict = v === 'unknown' ? null : v;
+    }
+
+    showResult(box, result, null, verdict);
+  }
+
+  function showResult(box, resultOrMsg, errorMsg, verdict) {
+    box.innerHTML = '';
+    if (errorMsg) {
+      box.className = 'sat-result-box info';
+      box.textContent = errorMsg;
+      return;
+    }
+    box.className = 'sat-result-box ' + (resultOrMsg ? 'true' : 'false');
+    const evalLine = document.createElement('div');
+    evalLine.textContent = resultOrMsg
+      ? '✓ The formula is TRUE under this assignment.'
+      : '✗ The formula is FALSE under this assignment.';
+    box.appendChild(evalLine);
+
+    if (verdict) {
+      const vLine = document.createElement('div');
+      vLine.className = 'sat-verdict ' + verdict;
+      const labels = {
+        tautology:     '◆ Tautology — true under every possible assignment.',
+        contradiction: '◆ Contradiction — false under every possible assignment.',
+        contingent:    '◆ Contingent — true under some assignments, false under others.'
+      };
+      vLine.textContent = labels[verdict] || '';
+      box.appendChild(vLine);
+    }
+  }
+
+})();
+
+// Init
+render();
+
+if (location.search.includes('ndSelfTest=1') || localStorage.getItem('ndSelfTest') === '1') {
+  runDevSelfTests();
+}
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bryan Deduction — Bryan-Style Proof Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f9f7f3;
+  --surface: #ffffff;
+  --border: #d4cfc6;
+  --border-dark: #a09890;
+  --ink: #1c1c1e;
+  --muted: #6e6861;
+  --accent: #2c5f8a;
+  --accent-light: #e8f0f8;
+  --green: #1a6b3a;
+  --green-light: #e6f4ec;
+  --red: #9b1c1c;
+  --red-light: #fdf0f0;
+  --amber: #7a4f00;
+  --amber-light: #fef9ee;
+  --subproof-bar: #8aabcc;
+  --premise-bg: #f0f4f9;
+  --mono: 'JetBrains Mono', monospace;
+  --serif: 'Lora', serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 15px;
+  min-height: 100vh;
+}
+
+/* ─── HEADER ─── */
+header {
+  background: var(--ink);
+  color: #fff;
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 3px solid var(--accent);
+}
+header h1 {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+header span {
+  font-family: var(--mono);
+  font-size: .7rem;
+  color: #888;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* ─── LAYOUT ─── */
+.main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 20px;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ─── PANEL ─── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.panel-header {
+  background: var(--ink);
+  color: #fff;
+  padding: 9px 14px;
+  font-family: var(--mono);
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel-body { padding: 16px; }
+
+/* ─── SETUP FORM ─── */
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.setup-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.setup-row label {
+  font-family: var(--mono);
+  font-size: .75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+.setup-row input {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: .95rem;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+  border-radius: 2px;
+}
+.setup-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+
+.btn {
+  font-family: var(--mono);
+  font-size: .8rem;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  letter-spacing: .04em;
+  transition: opacity .15s, background .15s;
+}
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #1e4a70; }
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.btn-ghost:hover { border-color: var(--border-dark); color: var(--ink); }
+.btn-sm { padding: 3px 8px; font-size: .72rem; }
+
+/* ─── SYMBOL BAR ─── */
+.sym-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.sym-btn {
+  font-family: var(--mono);
+  font-size: 1rem;
+  padding: 3px 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all .1s;
+  min-width: 32px;
+  text-align: center;
+}
+.sym-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ─── FITCH PROOF TABLE ─── */
+.proof-wrap {
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.fitch-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 500px;
+}
+
+.fitch-table td {
+  padding: 0;
+  vertical-align: middle;
+}
+
+.proof-row {
+  position: relative;
+}
+
+/* Line number */
+.td-num {
+  font-family: var(--mono);
+  font-size: .75rem;
+  color: var(--muted);
+  text-align: right;
+  padding-right: 10px;
+  width: 36px;
+  user-select: none;
+}
+
+/* Depth indentation via subproof bars */
+.td-indent {
+  width: 0;
+  padding: 0;
+}
+
+.indent-cell {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+.subproof-bar {
+  width: 16px;
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.subproof-bar .bar-line {
+  width: 2px;
+  background: var(--subproof-bar);
+  margin: 0 auto;
+  min-height: 32px;
+}
+
+/* Formula cell */
+.td-formula {
+  padding: 3px 0;
+}
+
+.formula-input {
+  font-family: var(--mono);
+  font-size: 1rem;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink);
+  outline: none;
+  width: 100%;
+  min-width: 180px;
+  transition: border-color .15s, background .15s;
+}
+.formula-input:focus {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.formula-input.is-premise {
+  background: var(--premise-bg);
+  border-color: var(--border);
+  font-weight: 500;
+}
+.formula-input.is-premise:focus {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.formula-input.valid { background: var(--green-light) !important; border-color: #6fcf97 !important; }
+.formula-input.invalid { background: var(--red-light) !important; border-color: #e88 !important; }
+
+/* Assumption separator line inside subproof */
+.assumption-sep {
+  border-bottom: 1.5px solid var(--ink);
+  margin-bottom: 0;
+}
+
+/* Justification cell */
+.td-just {
+  padding: 3px 4px 3px 8px;
+  width: 180px;
+}
+.just-input {
+  font-family: var(--mono);
+  font-size: .82rem;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--muted);
+  outline: none;
+  width: 100%;
+  transition: border-color .15s, background .15s;
+}
+.just-input:focus {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--ink);
+}
+.just-input.premise-label {
+  color: var(--accent);
+  font-style: italic;
+  pointer-events: none;
+}
+.just-input.valid { color: var(--green); }
+.just-input.invalid { color: var(--red); }
+
+/* Action buttons column */
+.td-actions {
+  width: 110px;
+  padding: 3px 4px;
+  white-space: nowrap;
+}
+.td-actions button {
+  font-family: var(--mono);
+  font-size: .7rem;
+  padding: 2px 5px;
+  margin: 1px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all .1s;
+  white-space: nowrap;
+}
+.td-actions button:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+.td-actions button.del-btn:hover { background: var(--red); border-color: var(--red); }
+
+/* Status row at bottom of proof */
+.proof-status {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: .8rem;
+  display: none;
+}
+.proof-status.ok { background: var(--green-light); color: var(--green); border: 1px solid #6fcf97; display: block; }
+.proof-status.fail { background: var(--red-light); color: var(--red); border: 1px solid #e88; display: block; }
+.proof-status.incomplete { background: var(--amber-light); color: var(--amber); border: 1px solid #f0c060; display: block; }
+
+/* Conclusion line */
+.conclusion-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 2px solid var(--border-dark);
+}
+.conclusion-label {
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  white-space: nowrap;
+}
+.conclusion-formula {
+  font-family: var(--mono);
+  font-size: 1rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ─── RIGHT PANEL: rules reference ─── */
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.rule-section-divider {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 6px 14px 4px;
+  font-family: var(--mono);
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  border-top: 1px solid var(--border);
+}
+.rule-section-divider-tfl {
+  color: var(--muted);
+  background: var(--bg);
+}
+.rule-section-divider-fol {
+  color: var(--accent);
+  background: var(--accent-light);
+  font-weight: 700;
+}
+
+.rule-item {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .1s;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.rule-item:last-child { border-bottom: none; }
+.rule-item:hover { background: var(--accent-light); }
+.rule-item:hover .rule-snippet { color: var(--accent); }
+
+.rule-name {
+  font-family: var(--mono);
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.rule-key {
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 1px 5px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.rule-snippet {
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--muted);
+  flex: 1;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rule-detail {
+  display: none;
+  padding: 8px 14px 10px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  font-size: .8rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.rule-detail.open { display: block; }
+.rule-detail .rd-form {
+  font-family: var(--mono);
+  color: var(--ink);
+  font-size: .85rem;
+  margin-bottom: 4px;
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+}
+
+/* ─── INSTRUCTIONS ─── */
+.instructions {
+  font-size: .83rem;
+  color: var(--muted);
+  line-height: 1.65;
+  padding: 12px 14px;
+}
+.instructions strong { color: var(--ink); }
+.instructions code {
+  font-family: var(--mono);
+  font-size: .8rem;
+  background: var(--bg);
+  padding: 0 4px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+
+/* ─── CHECK BUTTON AREA ─── */
+.check-area {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ─── UNDO/REDO ─── */
+.undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.undo-btn {
+  font-family: var(--mono);
+  font-size: .75rem;
+  padding: 5px 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all .12s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.undo-btn:hover:not(:disabled) {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.undo-btn:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+}
+.undo-btn .kbd {
+  font-size: .65rem;
+  background: rgba(0,0,0,.08);
+  border-radius: 2px;
+  padding: 1px 4px;
+  letter-spacing: 0;
+}
+.undo-btn:hover:not(:disabled) .kbd {
+  background: rgba(255,255,255,.15);
+}
+.history-count {
+  font-family: var(--mono);
+  font-size: .68rem;
+  color: var(--muted);
+  padding: 0 2px;
+  opacity: .6;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+}
+.empty-state .big { font-size: 2rem; margin-bottom: 10px; opacity: .3; }
+.empty-state p { font-size: .88rem; }
+
+@media (max-width: 800px) {
+  .main { grid-template-columns: 1fr; }
+}
+
+/* ─── FOL SYNTAX PANEL ─── */
+.fol-section {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 14px;
+}
+.fol-section:last-child { border-bottom: none; }
+.fol-section-title {
+  font-family: var(--mono);
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.fol-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .82rem;
+  margin-bottom: 6px;
+}
+.fol-table th {
+  font-family: var(--mono);
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+  text-align: left;
+  padding: 2px 6px 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.fol-table td {
+  padding: 3px 6px 3px 0;
+  vertical-align: top;
+  color: var(--ink);
+}
+.fol-table tr:not(:last-child) td { border-bottom: 1px solid #f0ece6; }
+.fol-ex code {
+  font-family: var(--mono);
+  font-size: .82rem;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 1px 5px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.fol-note {
+  font-size: .78rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.fol-note-cell {
+  font-size: .78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.fol-note-cell code {
+  font-family: var(--mono);
+  font-size: .78rem;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+/* ─── SATISFIABILITY CHECKER ─── */
+#satPanel { margin-top: 18px; }
+#satPanel .panel-header { cursor: pointer; user-select: none; }
+#satPanel .panel-header .sat-toggle { font-size: .85rem; opacity: .7; }
+#satBody { padding: 16px; }
+.sat-formula-row { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+.sat-formula-row input { flex:1; font-family:var(--mono); font-size:.95rem;
+  padding:6px 10px; border:1px solid var(--border); border-radius:4px; background:var(--surface); }
+.sat-formula-row button { white-space:nowrap; }
+.sat-parse-msg { font-size:.82rem; margin-bottom:10px; }
+.sat-parse-msg.ok  { color: var(--ok); }
+.sat-parse-msg.err { color: var(--err); }
+.sat-assignments { margin-bottom:14px; }
+.sat-assign-title { font-size:.78rem; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--faint); margin-bottom:8px; }
+.sat-assign-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap:8px; }
+.sat-assign-row { display:flex; align-items:center; gap:8px;
+  background:var(--accent-light); border-radius:4px; padding:6px 10px; }
+.sat-assign-row label { font-family:var(--mono); font-size:.88rem; flex:1; color:var(--ink); }
+.sat-assign-row select { font-family:var(--mono); font-size:.85rem;
+  padding:2px 4px; border:1px solid var(--border); border-radius:3px; background:#fff; }
+.sat-domain-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.sat-domain-row label { font-size:.82rem; color:var(--faint); white-space:nowrap; }
+.sat-domain-row input { flex:1; font-family:var(--mono); font-size:.85rem;
+  padding:5px 8px; border:1px solid var(--border); border-radius:4px; background:var(--surface); }
+.sat-ext-row { display:flex; align-items:flex-start; gap:8px; margin-bottom:8px; }
+.sat-ext-row label { font-family:var(--mono); font-size:.88rem; min-width:60px; padding-top:6px; }
+.sat-ext-row input { flex:1; font-family:var(--mono); font-size:.85rem;
+  padding:5px 8px; border:1px solid var(--border); border-radius:4px; background:var(--surface); }
+.sat-ext-hint { font-size:.75rem; color:var(--faint); margin-top:2px; }
+.sat-eval-btn { margin-bottom:12px; }
+.sat-result-box { border-radius:5px; padding:12px 16px; font-size:.9rem; line-height:1.6; }
+.sat-result-box.true  { background:#d4edda; border:1px solid #6dbb7a; color:#1e5c29; }
+.sat-result-box.false { background:#fde8e8; border:1px solid #e57373; color:#7b1f1f; }
+.sat-result-box.info  { background:var(--accent-light); border:1px solid var(--accent); color:var(--ink); }
+.sat-verdict { font-weight:600; margin-top:6px; }
+.sat-verdict.tautology   { color:#1a6e2e; }
+.sat-verdict.contingent  { color:#7a5c00; }
+.sat-verdict.contradiction { color:#9b1c1c; }
+
+/* ── Assumption certification ─────────────────────────────── */
+.certify-lock-btn { background:none; border:none; cursor:pointer; font-size:1rem; padding:2px 4px; line-height:1; border-radius:4px; }
+.certify-lock-btn.pending { color:#e67e00; }
+.certify-lock-btn.ok      { color:#1a6e2e; }
+.certify-inline-tr td { background:#fffbf0; border-top:2px solid #f0ad4e; padding:12px 16px; }
+.certify-inline-tr.ok td { background:#f0faf3; border-top:2px solid #6dbb7a; }
+.certify-inline-header { font-size:.88rem; margin-bottom:10px; line-height:1.6; }
+.certify-formula { font-family:var(--mono); background:#f4f4f4; border-radius:4px; padding:2px 6px; }
+.certify-inline-fields { display:flex; flex-wrap:wrap; gap:10px 20px; align-items:flex-start; margin-bottom:10px; }
+.certify-inline-actions { display:flex; gap:8px; align-items:center; }
+.certify-result { font-size:.85rem; font-weight:600; }
+.certify-result.err { color:#9b1c1c; }
+.certify-result.ok  { color:#1a6e2e; }
+.formula-input.certify-pending { background:#fff8e1 !important; border-color:#f0ad4e !important; }
+.formula-input.certify-ok      { background:#d4edda !important; border-color:#6dbb7a !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bryan Deduction</h1>
+  <span>Bryan-Style Proof Editor</span>
+</header>
+
+<!-- SYMBOL BAR -->
+<div class="sym-bar" id="symBar">
+  <button class="sym-btn" data-sym="¬" title="Negation">¬</button>
+  <button class="sym-btn" data-sym="∧" title="Conjunction">∧</button>
+  <button class="sym-btn" data-sym="∨" title="Disjunction">∨</button>
+  <button class="sym-btn" data-sym="→" title="Conditional">→</button>
+  <button class="sym-btn" data-sym="↔" title="Biconditional">↔</button>
+  <button class="sym-btn" data-sym="∀" title="Universal">∀</button>
+  <button class="sym-btn" data-sym="∃" title="Existential">∃</button>
+  <button class="sym-btn" data-sym="⊥" title="Contradiction">⊥</button>
+  <span style="width:1px;background:var(--border-dark);margin:4px 8px;align-self:stretch;display:inline-block;"></span>
+  <button class="sym-btn" data-sym="⌜" title="Left corner quote (open quasi-quotation)">⌜</button>
+  <button class="sym-btn" data-sym="⌝" title="Right corner quote (close quasi-quotation)">⌝</button>
+</div>
+
+<div class="main">
+
+  <!-- LEFT: PROOF AREA -->
+  <div>
+
+    <!-- Setup -->
+    <div class="panel" style="margin-bottom:18px;" id="setupPanel">
+      <div class="panel-header">
+        <span>Problem Setup</span>
+      </div>
+      <div class="panel-body">
+        <div class="setup-form">
+          <div class="setup-row">
+            <label>Premises</label>
+            <input type="text" id="premisesInput" placeholder="e.g.  P → Q, Q → R" />
+          </div>
+          <div class="setup-row">
+            <label>Conclusion</label>
+            <input type="text" id="conclusionInput" placeholder="e.g.  P → R" />
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary" id="createProofBtn">Create Proof</button>
+            <button class="btn btn-ghost" id="clearProofBtn" style="display:none">Clear &amp; Reset</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proof editor -->
+    <div class="panel" id="proofPanel" style="display:none">
+      <div class="panel-header">
+        <span>Proof</span>
+        <button class="btn btn-ghost btn-sm" id="checkBtn" style="color:#fff;border-color:#555;">▶ Check Proof</button>
+      </div>
+      <div class="proof-wrap">
+        <table class="fitch-table" id="fitchTable">
+          <tbody id="fitchBody"></tbody>
+        </table>
+        <div class="conclusion-line">
+          <span class="conclusion-label">⊢ Prove:</span>
+          <span class="conclusion-formula" id="conclusionDisplay"></span>
+        </div>
+      </div>
+      <div class="check-area">
+        <div class="proof-status" id="proofStatus"></div>
+        <div class="undo-bar">
+          <button class="undo-btn" id="undoBtn" disabled title="Undo (Ctrl+Z)">
+            ↩ Undo <span class="kbd">Ctrl+Z</span>
+          </button>
+          <span class="history-count" id="historyCount"></span>
+          <button class="undo-btn" id="redoBtn" disabled title="Redo (Ctrl+Y)">
+            Redo ↪ <span class="kbd">Ctrl+Y</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="panel" id="emptyPanel">
+      <div class="empty-state">
+        <div class="big">⊢</div>
+        <p>Enter premises and a conclusion above to begin your proof.</p>
+      </div>
+    </div>
+
+    <!-- Satisfiability Checker -->
+    <div class="panel" id="satPanel">
+      <div class="panel-header" id="satPanelHeader">
+        <span>Satisfiability Checker</span>
+        <span class="sat-toggle" id="satToggleIcon">▼</span>
+      </div>
+      <div id="satBody">
+        <div class="sat-formula-row">
+          <input type="text" id="satFormulaInput" placeholder="Enter a formula, e.g.  (P ∧ Q) → P" />
+          <button class="btn btn-primary" id="satParseBtn">Check WFF</button>
+        </div>
+        <div class="sat-parse-msg" id="satParseMsg"></div>
+        <div id="satAssignSection" style="display:none">
+          <div id="satDomainSection" style="display:none">
+            <div class="sat-assign-title">Universe of Discourse</div>
+            <div class="sat-domain-row">
+              <label>Domain elements (comma-separated):</label>
+              <input type="text" id="satDomainInput" placeholder="e.g.  a, b, c" />
+            </div>
+          </div>
+          <div id="satPropSection" style="display:none">
+            <div class="sat-assign-title">Assign truth values</div>
+            <div class="sat-assign-grid" id="satPropGrid"></div>
+          </div>
+          <div id="satExtSection" style="display:none">
+            <div class="sat-assign-title" style="margin-top:12px">Predicate extensions</div>
+            <div id="satExtGrid"></div>
+          </div>
+          <div id="satVarSection" style="display:none">
+            <div class="sat-assign-title" style="margin-top:12px">Variable values</div>
+            <div class="sat-assign-grid" id="satVarGrid"></div>
+          </div>
+          <button class="btn btn-primary sat-eval-btn" id="satEvalBtn">Evaluate</button>
+          <div id="satResultBox"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: RULES + INSTRUCTIONS -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Rules Reference -->
+    <div class="panel">
+      <div class="panel-header"><span>Inference Rules</span></div>
+      <div class="rules-list" id="rulesList"></div>
+    </div>
+
+    <!-- How to Use -->
+    <div class="panel">
+      <div class="panel-header"><span>How to Use</span></div>
+      <div class="instructions">
+        <p style="margin-bottom:8px;"><strong>1. Set up</strong> — Enter comma-separated premises and a conclusion, then click <em>Create Proof</em>.</p>
+        <p style="margin-bottom:8px;"><strong>2. Type formulas</strong> — Each row has a formula cell (left) and a justification cell (right). Click either to edit.</p>
+        <p style="margin-bottom:8px;"><strong>3. Justifications</strong> — Type the rule abbreviation and line numbers, e.g. <code>∧I 1,2</code> or <code>→E 3,4</code>. Premises are labelled automatically.</p>
+        <p style="margin-bottom:8px;"><strong>4. Subproofs</strong> — Use <strong>+sub</strong> to open a subproof (needed for →I, ¬I, ∨E, ∀I, ∃E). The first line is always an assumption.</p>
+        <p style="margin-bottom:8px;"><strong>5. FOL quantifiers</strong> — Write <code>∀x Fx</code> or <code>∃x Gxy</code>. For <code>∀E</code> and <code>∃I</code> specify the substitution: <code>∀E 1 [x/a]</code> (replace x with a). For <code>∀I</code> write <code>∀I 3-5 [c/x]</code> (c is the arbitrary constant, x the variable). For <code>∃E</code> write <code>∃E 1 2-4</code>. <strong>Scope convention:</strong> binary connectives (→, ∨, ∧, ↔) always bind more tightly than quantifier scope extension. So <code>∃x Dx→Q</code> means <code>(∃x Dx)→Q</code>. Write <code>∃x(Dx→Q)</code> to bind → inside the quantifier.</p>
+        <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
+        <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
+        <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
+        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> (formula) or <code>True(⌜n⌝)</code> (line number) to assert truth. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝) or True(⌜m⌝). <strong>TI</strong> (no number): self-referential truth-teller True(⌜n⌝) on line n. <strong>TE m</strong>: from True(⌜φ⌝) or True(⌜n⌝) on line m, derive the named formula. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
+      </div>
+    </div>
+
+    <!-- FOL Syntax Reference -->
+    <div class="panel" id="folSyntaxPanel">
+      <div class="panel-header">
+        <span>FOL Syntax Guide</span>
+      </div>
+      <div class="panel-body" style="padding:0;">
+
+        <div class="fol-section">
+          <div class="fol-section-title">Recursive definition of a WFF</div>
+          <div class="fol-note" style="line-height:1.7">
+            <strong>Base cases</strong> — each of the following is a WFF:
+            <ol style="margin:.4em 0 .6em 1.4em; padding:0">
+              <li><code>⊥</code> &mdash; the falsum constant</li>
+              <li>Any single uppercase letter (<code>A</code>–<code>Z</code>) standing alone &mdash; a propositional variable</li>
+              <li>Any single lowercase letter (<code>a</code>–<code>z</code>) standing alone &mdash; a sentential variable</li>
+              <li>An uppercase letter followed by one or more lowercase term letters (e.g. <code>Fx</code>, <code>Gxy</code>) &mdash; a predicate application. (<code>Ax</code> and <code>Ex</code> are reserved for quantifier shorthands and are not WFFs.)</li>
+              <li><code>t<sub>1</sub> = t<sub>2</sub></code> where t<sub>1</sub> and t<sub>2</sub> are lowercase term letters &mdash; an identity statement</li>
+              <li><code>True(⌜n⌝)</code> where n is a positive integer &mdash; the truth predicate applied to a line-number reference. (The proof-time constraint that line n must contain a WFF is a semantic condition, not a grammatical one.)</li>
+            </ol>
+            <strong>Recursive cases</strong> — if φ and ψ are WFFs and x is a variable, then so are:
+            <ol style="margin:.4em 0 .6em 1.4em; padding:0" start="7">
+              <li><code>True(⌜φ⌝)</code> &mdash; the truth predicate applied to a quasi-quoted WFF</li>
+              <li><code>¬φ</code></li>
+              <li><code>(φ ∧ ψ)</code>, <code>(φ ∨ ψ)</code>, <code>(φ → ψ)</code>, <code>(φ ↔ ψ)</code></li>
+              <li><code>∀x φ</code>, <code>∃x φ</code></li>
+            </ol>
+            Nothing else is a WFF.
+          </div>
+        </div>
+
+        <div class="fol-section">
+          <div class="fol-section-title">Atomic sentences</div>
+          <table class="fol-table">
+            <tr><td class="fol-ex"><code>P</code></td><td>TFL sentence letter</td></tr>
+            <tr><td class="fol-ex"><code>Fa</code></td><td>Predicate F, term a</td></tr>
+            <tr><td class="fol-ex"><code>Gab</code></td><td>Relation G, terms a, b</td></tr>
+            <tr><td class="fol-ex"><code>a=b</code></td><td>Identity</td></tr>
+          </table>
+          <div class="fol-note">Propositional variables: any single uppercase letter, or any single lowercase letter standing alone (e.g. <code>P</code>, <code>p</code>, <code>q</code>).<br>Predicates: single uppercase letter followed by one or more term letters (e.g. <code>Fx</code>, <code>Gxy</code>). Note: <code>Ax</code> and <code>Ex</code> are reserved as shorthands for <code>∀x</code> and <code>∃x</code> — use the Unicode symbols instead.<br>Terms / constants: single lowercase letter a–w.<br>Variables: single lowercase letter a–z (used inside quantifiers).</div>
+        </div>
+
+        <div class="fol-section">
+          <div class="fol-section-title">Writing quantifiers</div>
+          <table class="fol-table">
+            <tr><th>You type</th><th>Means</th></tr>
+            <tr><td class="fol-ex"><code>∀x Fx</code></td><td>For all x: Fx</td></tr>
+            <tr><td class="fol-ex"><code>forall x Fx</code></td><td>Same (word form)</td></tr>
+            <tr><td class="fol-ex"><code>all x Fx</code></td><td>Same (word form)</td></tr>
+            <tr><td class="fol-ex"><code>∃x Fx</code></td><td>There exists x: Fx</td></tr>
+            <tr><td class="fol-ex"><code>exists x Fx</code></td><td>Same (word form)</td></tr>
+            <tr><td class="fol-ex"><code>some x Fx</code></td><td>Same (word form)</td></tr>
+          </table>
+          <div class="fol-note">Use parentheses to delimit scope when needed: <code>∀x (Fx → Gx)</code>.<br>Without parens, the quantifier takes the rest of the line as its scope.<br><strong>Note:</strong> <code>Ax</code>/<code>Ex</code> shorthands are not supported — they are ambiguous with predicate applications like <code>Ea</code> (predicate E applied to a).</div>
+        </div>
+
+        <div class="fol-section">
+          <div class="fol-section-title">Justification notation</div>
+          <table class="fol-table">
+            <tr><th>Rule</th><th>Write</th><th>Example</th></tr>
+            <tr>
+              <td>∀E</td>
+              <td><code>∀E m [x/t]</code></td>
+              <td class="fol-note-cell">From <code>∀x Fx</code> on line 1,<br>derive <code>Fa</code>: write <code>∀E 1 [x/a]</code></td>
+            </tr>
+            <tr>
+              <td>∃I</td>
+              <td><code>∃I m [t/x]</code></td>
+              <td class="fol-note-cell">From <code>Fa</code> on line 2,<br>derive <code>∃x Fx</code>: write <code>∃I 2 [a/x]</code></td>
+            </tr>
+            <tr>
+              <td>∀I</td>
+              <td><code>∀I m [c/x]</code></td>
+              <td class="fol-note-cell">From <code>Fc</code> on line 3 (c arbitrary),<br>derive <code>∀x Fx</code>: write <code>∀I 3 [c/x]</code><br><span style="font-size:.75rem">c must not appear in any premise or undischarged assumption. [c/x] can often be omitted.</span></td>
+            </tr>
+            <tr>
+              <td>∃E</td>
+              <td><code>∃E m i–j</code></td>
+              <td class="fol-note-cell">From <code>∃x Fx</code> on line 1 and<br>subproof on lines 2–4: write <code>∃E 1 2-4</code></td>
+            </tr>
+          </table>
+          <div class="fol-note"><strong>[x/t]</strong> means "substitute variable x with term t". The substitution spec can often be omitted — the checker will infer it automatically for ∀E and ∃I.</div>
+        </div>
+
+        <div class="fol-section">
+          <div class="fol-section-title">Quasi-quotation &amp; Truth</div>
+          <table class="fol-table">
+            <tr><td class="fol-ex"><code>⌜φ⌝</code></td><td>Name of formula φ (a term)</td></tr>
+            <tr><td class="fol-ex"><code>True(⌜φ⌝)</code></td><td>Truth predicate: φ is true</td></tr>
+            <tr><td class="fol-ex"><code>True(⌜n⌝)</code></td><td>Truth predicate: the formula on proof line n is true (n must refer to the line of a WFF)</td></tr>
+            <tr><td class="fol-ex"><code>∀x True(⌜Fx⌝)</code></td><td>Every Fx-instance is true</td></tr>
+          </table>
+          <div class="fol-note">⌜φ⌝ is a <em>quasi-quotation</em> term denoting φ. Unlike opaque quotation, variables inside ⌜⌝ still participate in substitution: instantiating x→a in ∀x&nbsp;True(⌜Fx⌝) yields True(⌜Fa⌝). Use the ⌜ ⌝ buttons in the symbol bar above.</div>
+        </div>
+
+        <div class="fol-section">
+          <div class="fol-section-title">Truth rule justifications</div>
+          <table class="fol-table">
+            <tr><th>Rule</th><th>Write</th><th>Example</th></tr>
+            <tr>
+              <td>TI (formula)</td>
+              <td><code>TI m</code></td>
+              <td class="fol-note-cell">Line 1: <code>P ∨ Q</code><br>Line 2: <code>True(⌜P ∨ Q⌝)</code> &mdash; <code>TI 1</code></td>
+            </tr>
+            <tr>
+              <td>TI (line no.)</td>
+              <td><code>TI n</code></td>
+              <td class="fol-note-cell">Line 3: <code>P ∨ Q</code><br>Line 6: <code>True(⌜3⌝)</code> &mdash; <code>TI 3</code><br><span style="font-size:.75rem">The numeral inside ⌜⌝ must match the cited line number.</span></td>
+            </tr>
+            <tr>
+              <td>TI (self-ref)</td>
+              <td><code>TI</code></td>
+              <td class="fol-note-cell">Line 5: <code>True(⌜5⌝)</code> &mdash; <code>TI</code><br><span style="font-size:.75rem">Truth-teller: no citation needed when the numeral equals the current line.</span></td>
+            </tr>
+            <tr>
+              <td>TE (formula)</td>
+              <td><code>TE m</code></td>
+              <td class="fol-note-cell">Line 2: <code>True(⌜P ∨ Q⌝)</code><br>Line 3: <code>P ∨ Q</code> &mdash; <code>TE 2</code></td>
+            </tr>
+            <tr>
+              <td>TE (line no.)</td>
+              <td><code>TE m</code></td>
+              <td class="fol-note-cell">Line 6: <code>True(⌜3⌝)</code><br>Line 7: <code>P ∨ Q</code> &mdash; <code>TE 6</code><br><span style="font-size:.75rem">Derives the formula on line 3, whatever it is.</span></td>
+            </tr>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CORE DATA MODEL
+// ═══════════════════════════════════════════════════════════════
+
+/*
+  A proof is an array of nodes. Each node:
+  {
+    id: unique string,
+    type: 'premise' | 'step' | 'assumption',  // assumption = first line of subproof
+    formula: string,
+    justification: string,   // e.g. "∧I 1,2" — premises get "Pr" automatically
+    depth: number,           // 0 = main proof, 1 = first subproof, etc.
+    isLastInSubproof: bool,  // true if this is the closing line of a subproof at this depth
+    status: null | 'valid' | 'invalid' | 'unchecked'
+  }
+*/
+
+let proof = [];
+let conclusionFormula = '';
+let lastFocused = null;
+let idCounter = 0;
+function mkId() { return 'r' + (++idCounter); }
+
+// ═══════════════════════════════════════════════════════════════
+// UNDO / REDO HISTORY
+// ═══════════════════════════════════════════════════════════════
+const MAX_HISTORY = 100;
+let undoStack = [];  // array of JSON snapshots
+let redoStack = [];
+
+function snapshot() {
+  // Deep-clone the proof array as JSON
+  undoStack.push(JSON.stringify(proof));
+  if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  redoStack = [];  // any new action clears redo
+  updateUndoUI();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(JSON.stringify(proof));
+  proof = JSON.parse(undoStack.pop());
+  render();
+  clearStatus();
+  updateUndoUI();
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(JSON.stringify(proof));
+  proof = JSON.parse(redoStack.pop());
+  render();
+  clearStatus();
+  updateUndoUI();
+}
+
+function updateUndoUI() {
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  const count = document.getElementById('historyCount');
+  if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+  if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+  if (count) count.textContent = undoStack.length > 0 ? `${undoStack.length}` : '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SYMBOL SHORTCUTS
+// ═══════════════════════════════════════════════════════════════
+function normalizeFormula(s) {
+  if (s == null) return "";
+  s = String(s);
+  return s
+    .replace(/<->/g, '↔').replace(/<>/g, '↔').replace(/[Bb]iff\b/g, '↔')
+    .replace(/->/g, '→').replace(/=>/g, '→')
+    .replace(/\/\\/g, '∧').replace(/\^/g, '∧').replace(/&/g, '∧')
+    .replace(/\\\//g, '∨')
+    // Normalise ¬ BEFORE v→∨ so patterns like )v-φ and )v~φ are handled correctly
+    .replace(/~|-(?!>)/g, '¬')
+    .replace(/_\|_/g, '⊥').replace(/\bXX\b|#/g, '⊥')
+    // v → ∨  (multiple patterns, all run after ¬ is already in place)
+    .replace(/\s+[vV]\s+/g, ' ∨ ')
+    .replace(/\)\s*[vV]\s*(?=\(|¬|∀|∃|[A-Z]|⊥)/g, ') ∨ ')
+    .replace(/(?<=\)|[a-z]|[A-Z]|⊥)\s*[vV]\s*\(/g, ' ∨ (')
+    // Final robust sweep: v between any formula-ending token and any formula-starting token
+    .replace(/([\)\w⊥∀∃¬])\s*v\s*(?=[¬∀∃(⊥])/g, '$1 ∨ ')
+    .replace(/([\)\w⊥∀∃¬])\s*v\s*(?=[A-Z])/g, '$1 ∨ ')
+    .trim();
+}
+
+// Expand quantifier shorthands — call ONLY on raw user input, never on
+// already-normalized formulas (to avoid mangling predicate names like Ea or Ax).
+// NOTE: single-letter shorthands Ax/Ex are intentionally omitted here because
+// they are ambiguous with FOL atoms (e.g. Ea could mean predicate E applied to
+// constant a, or the existential ∃a). Use ∀/∃ symbols or word forms instead.
+function preprocessInput(s) {
+  if (s == null) return "";
+  s = normalizeFormula(String(s));
+  s = s
+    // Unambiguous word forms
+    .replace(/\bforall\s+([a-z])\b/gi, '∀$1')
+    .replace(/\ball\s+([a-z])\b/gi,    '∀$1')
+    .replace(/\bexists\s+([a-z])\b/gi, '∃$1')
+    .replace(/\bsome\s+([a-z])\b/gi,   '∃$1')
+    // ∀(x)φ / ∃(x)φ  →  ∀x φ / ∃x φ
+    .replace(/∀\s*\(([a-z])\)\s*/g, '∀$1 ')
+    .replace(/∃\s*\(([a-z])\)\s*/g, '∃$1 ')
+    .trim();
+
+  // Predicate application sugar: P(a) -> Pa, R(x,y) -> Rxy
+  // Supports single-letter lowercase terms and strips commas/spaces.
+  // Exception: True(...) always keeps its function-application form for the truth predicate.
+  s = s.replace(/([A-Z][A-Za-z0-9]*)\s*\(\s*([a-z](?:\s*,\s*[a-z])*)\s*\)/g, (_, pred, args) => {
+    if (pred === 'True') return `True(${args.replace(/[\s,]/g, '')})`;
+    return pred + args.replace(/[\s,]/g, '');
+  });
+
+  return s;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RULES REFERENCE
+// ═══════════════════════════════════════════════════════════════
+const RULES = [
+  // ── Truth-Functional Logic ──
+  { key: '∧I',  name: 'Conjunction Intro',      abbr: '∧I',  form: 'φ (m), ψ (n) → φ∧ψ',                     desc: 'From φ on line m and ψ on line n, derive φ ∧ ψ.',                           lines: 2 },
+  { key: '∧E',  name: 'Conjunction Elim',       abbr: '∧E',  form: 'φ∧ψ (m) → φ or ψ',                       desc: 'From φ ∧ ψ on line m, derive either φ or ψ.',                              lines: 1 },
+  { key: '∨I',  name: 'Disjunction Intro',      abbr: '∨I',  form: 'φ (m) → φ∨ψ or ψ∨φ',                     desc: 'From φ on line m, derive φ ∨ ψ (for any ψ).',                             lines: 1 },
+  { key: '∨E',  name: 'Disjunction Elim',       abbr: '∨E',  form: 'φ∨ψ (m), [φ⊢χ] (i–j), [ψ⊢χ] (k–l) → χ', desc: 'From φ∨ψ and two subproofs each deriving χ, derive χ.',                    lines: 3 },
+  { key: '→I',  name: 'Conditional Intro',      abbr: '→I',  form: '[φ⊢ψ] (m–n) → φ→ψ',                      desc: 'From a subproof assuming φ (line m) and deriving ψ (line n), derive φ→ψ.', lines: 2 },
+  { key: '→E',  name: 'Conditional Elim',       abbr: '→E',  form: 'φ→ψ (m), φ (n) → ψ',                     desc: 'Modus Ponens. From φ→ψ and φ, derive ψ.',                                  lines: 2 },
+  { key: '↔I',  name: 'Biconditional Intro',    abbr: '↔I',  form: 'φ→ψ (m), ψ→φ (n) → φ↔ψ',                 desc: 'From φ→ψ and ψ→φ, derive φ↔ψ.',                                           lines: 2 },
+  { key: '↔E',  name: 'Biconditional Elim',     abbr: '↔E',  form: 'φ↔ψ (m), φ or ψ (n) → ψ or φ',           desc: 'From φ↔ψ and either side, derive the other side.',                         lines: 2 },
+  { key: '¬I',  name: 'Negation Intro',         abbr: '¬I',  form: '[φ⊢⊥] (m–n) → ¬φ',                       desc: 'From a subproof assuming φ (line m) and deriving ⊥ (line n), derive ¬φ.',  lines: 2 },
+  { key: '¬E',  name: 'Negation Elim',          abbr: '¬E',  form: '¬¬φ (m) → φ',                             desc: 'From ¬¬φ, derive φ. (Double negation elimination)',                         lines: 1 },
+  { key: '⊥I',  name: 'Contradiction Intro',   abbr: '⊥I',  form: 'φ (m), ¬φ (n) → ⊥',                      desc: 'From φ on line m and ¬φ on line n (or vice versa), derive ⊥. This is how you introduce a contradiction into your proof.',  lines: 2 },
+  { key: 'X',   name: 'Explosion (Ex Falso)',   abbr: 'X',   form: '⊥ (m) → φ',                               desc: 'From ⊥ (contradiction) on line m, derive anything.',                       lines: 1 },
+  { key: 'IP',  name: 'Indirect Proof',         abbr: 'IP',  form: '[¬φ⊢⊥] (m–n) → φ',                       desc: 'From a subproof assuming ¬φ and deriving ⊥, derive φ.',                    lines: 2 },
+  // ── First-Order Logic ──
+  { key: '∀I',  name: 'Universal Intro',        abbr: '∀I',  form: 'φc (m) → ∀x φx  (c not in premises)',      desc: 'From φc on line m (where c is an arbitrary constant not free in any undischarged assumption), derive ∀x φx. Write as: ∀I m [c/x]. The [c/x] spec can often be omitted — the checker will infer it.', lines: 1, isFOL: true },
+  { key: '∀E',  name: 'Universal Elim',         abbr: '∀E',  form: '∀x φx (m) → φ[t/x]',                      desc: 'From ∀x φ on line m, derive φ[t/x] for any term t. Write as: ∀E m [x/t].', lines: 1, isFOL: true },
+  { key: '∃I',  name: 'Existential Intro',      abbr: '∃I',  form: 'φ[t/x] (m) → ∃x φx',                      desc: 'From φ[t] on line m, derive ∃x φ[x]. Write as: ∃I m [t/x].', lines: 1, isFOL: true },
+  { key: '∃E',  name: 'Existential Elim',       abbr: '∃E',  form: '∃x φx (m), [φc⊢ψ] (i–j) → ψ',            desc: 'From ∃x φ and a subproof from φ[c] to ψ (c not free in ψ or any undischarged assumption), derive ψ. Write as: ∃E m i–j.', lines: 3, isFOL: true },
+  { key: '=E',  name: 'Identity Elim',          abbr: '=E',  form: 'a=b (m), φ[a] (n) → φ[b]',                desc: 'Substitute identicals: from a=b and φ[a], derive φ[b].', lines: 2, isFOL: true },
+  // ── Truth Theory ──
+  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)  or  φ (m) → True(⌜m⌝)',   desc: 'Two forms. (1) Spell out the formula: from φ on line m, derive True(⌜φ⌝). Write: TI m. (2) Use a line number: from any formula on line n, derive True(⌜n⌝). Write: TI n with n matching the numeral inside the quotes.', lines: 1, isTruth: true },
+  { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ  or  True(⌜n⌝) (m) → formula on line n', desc: 'Two forms. (1) Formula-quote: from True(⌜φ⌝) on line m, derive φ. Write: TE m. (2) Line-number reference: from True(⌜n⌝) on line m, derive whatever formula is on line n. Write: TE m.', lines: 1, isTruth: true },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// PARSING HELPERS
+// ═══════════════════════════════════════════════════════════════
+function isWrappedInParens(f) {
+  if (!f.startsWith('(') || !f.endsWith(')')) return false;
+  let d = 0;
+  for (let i = 0; i < f.length - 1; i++) {
+    if (f[i] === '(') d++;
+    else if (f[i] === ')') d--;
+    if (d === 0) return false;
+  }
+  return true;
+}
+
+function stripParens(f) {
+  f = f.trim();
+  while (isWrappedInParens(f)) f = f.slice(1,-1).trim();
+  return f;
+}
+
+// Split on top-level binary operator, right-most for right-associativity
+function splitOn(f, ops) {
+  f = f.trim();
+  const inner = isWrappedInParens(f) ? f.slice(1,-1).trim() : f;
+  let depth = 0;
+  // scan right to left for right-assoc
+  for (let i = inner.length - 1; i >= 0; i--) {
+    const c = inner[i];
+    if (c === ')') depth++;
+    else if (c === '(') depth--;
+    if (depth === 0) {
+      for (const op of ops) {
+        if (inner.slice(i, i + op.length) === op) {
+          const left = inner.slice(0, i).trim();
+          const right = inner.slice(i + op.length).trim();
+          if (left && right) return { op, left, right };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function getTopOp(f) {
+  const r = splitOn(f, ['↔','→','∨','∧']);
+  return r ? r.op : null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FOL HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+// Variables and terms: lowercase a–z (x,y,z allowed; spec says a–w but we extend for usability)
+const TERM_RE = /^[a-z]$/;
+
+// Parse a quantified prefix: ∀x or ∃x
+function parseQuantPrefix(s) {
+  s = s.trim();
+  const m = s.match(/^([∀∃])([a-z])\s*([\s\S]*)/);
+  if (!m) return null;
+  return { quant: m[1], variable: m[2], rest: m[3].trim() };
+}
+
+// Substitute all FREE occurrences of variable `v` with term `t` in a parsed node
+function substNode(node, v, t) {
+  if (!node) return node;
+  switch (node.type) {
+    case 'bot': return node;
+    case 'atom': {
+      // Atom like 'Fab': predicate is uppercase prefix, terms are lowercase suffix
+      const am = node.formula.match(/^([A-Z]+)([a-z]*)$/);
+      if (am) return { ...node, formula: am[1] + am[2].replace(new RegExp(v, 'g'), t) };
+      return node;
+    }
+    case 'identity': {
+      // a=b: replace both sides
+      return { ...node, formula: node.formula.replace(new RegExp(v, 'g'), t),
+               left: node.left === v ? t : node.left,
+               right: node.right === v ? t : node.right };
+    }
+    case 'neg': return { type: 'neg', sub: substNode(node.sub, v, t) };
+    case '∧': case '∨': case '→': case '↔':
+      return { type: node.type, left: substNode(node.left, v, t), right: substNode(node.right, v, t) };
+    case '∀': case '∃':
+      if (node.variable === v) return node;  // v is bound here — stop
+      return { type: node.type, variable: node.variable, scope: substNode(node.scope, v, t) };
+    case 'true':
+      return { type: 'true', arg: substTerm(node.arg, v, t) };
+    default: return node;
+  }
+}
+
+function needsParens(node) {
+  if (!node) return false;
+  return ['∧','∨','→','↔','∀','∃'].includes(node.type);
+}
+
+function unparse(node) {
+  if (!node) return '?';
+  switch (node.type) {
+    case 'atom': case 'identity': return node.formula;
+    case 'bot': return '⊥';
+    case 'neg': {
+      const s = unparse(node.sub);
+      return '¬' + (needsParens(node.sub) ? `(${s})` : s);
+    }
+    case '∧': case '∨': case '→': case '↔': {
+      const l = unparse(node.left), r = unparse(node.right);
+      const lp = needsParens(node.left) ? `(${l})` : l;
+      const rp = needsParens(node.right) ? `(${r})` : r;
+      return `${lp} ${node.type} ${rp}`;
+    }
+    case '∀': case '∃': {
+      const s = unparse(node.scope);
+      // Wrap scope in parens if it's a binary connective (otherwise ∀x Fx → Gx is ambiguous)
+      const sp = needsParens(node.scope) ? `(${s})` : s;
+      return `${node.type}${node.variable} ${sp}`;
+    }
+    case 'true':
+      return 'True(' + unparseTerm(node.arg) + ')';
+    default: return '?';
+  }
+}
+
+function substitute(formula, variable, term) {
+  const p = parseFOL(formula);
+  if (!p) return formula;
+  return unparse(substNode(p, variable, term));
+}
+
+// Check if variable v occurs free in a parsed node
+function isFreeInNode(v, node) {
+  if (!node) return false;
+  switch (node.type) {
+    case 'bot': return false;
+    case 'atom': {
+      // In atom 'Fab', terms are lowercase chars after predicate
+      const am = node.formula.match(/^[A-Z]+([a-z]*)$/);
+      return am ? am[1].includes(v) : false;
+    }
+    case 'identity': return node.left === v || node.right === v;
+    case 'neg': return isFreeInNode(v, node.sub);
+    case '∧': case '∨': case '→': case '↔':
+      return isFreeInNode(v, node.left) || isFreeInNode(v, node.right);
+    case '∀': case '∃':
+      if (node.variable === v) return false;  // bound
+      return isFreeInNode(v, node.scope);
+    case 'true':
+      return isFreeInTerm(v, node.arg);
+    default: return false;
+  }
+}
+
+function isFreeIn(v, formula) {
+  const node = parseFOL(normalizeFormula(formula));
+  if (!node) return false;
+  return isFreeInNode(v, node);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TERM HELPERS  (quasi-quotation)
+// ═══════════════════════════════════════════════════════════════
+
+// Parse a term: single lowercase variable  OR  ⌜φ⌝ (quasi-quoted formula).
+// parseTerm ↔ parseFOL are mutually recursive; JS hoisting makes order irrelevant.
+function parseTerm(s) {
+  s = s.trim();
+  if (/^[a-z]$/.test(s)) return { type: 'var', name: s };
+  if (s.startsWith('⌜')) {
+    let depth = 0, end = -1;
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === '⌜') depth++;
+      else if (s[i] === '⌝') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end === s.length - 1) {
+      const innerStr = s.slice(1, end).trim();
+      // ⌜n⌝ where n is a positive integer referring to the proof line of a WFF — a line-number reference
+      if (/^\d+$/.test(innerStr)) return { type: 'lineref', lineNum: parseInt(innerStr, 10) };
+      // ⌜φ⌝ — a quasi-quoted formula
+      const inner = parseFOL(innerStr);
+      return inner ? { type: 'quote', inner } : null;
+    }
+  }
+  return null;
+}
+
+function unparseTerm(term) {
+  if (!term) return '?';
+  if (term.type === 'var') return term.name;
+  if (term.type === 'quote') return '⌜' + unparse(term.inner) + '⌝';
+  if (term.type === 'lineref') return '⌜' + term.lineNum + '⌝';
+  if (typeof term === 'string') return term;
+  return '?';
+}
+
+// Under quasi-quotation, substitution recurses inside ⌜…⌝.
+// Line-number references are opaque: substituting x→a inside ⌜3⌝ leaves it as ⌜3⌝.
+function substTerm(term, v, t) {
+  if (!term) return term;
+  if (term.type === 'var') return term.name === v ? { type: 'var', name: t } : term;
+  if (term.type === 'quote') return { type: 'quote', inner: substNode(term.inner, v, t) };
+  if (term.type === 'lineref') return term;  // opaque — line numbers don't change under substitution
+  return term;
+}
+
+// Under quasi-quotation, a variable is free inside ⌜…⌝.
+// Line-number references contain no variables, so isFreeInTerm is always false for them.
+function isFreeInTerm(v, term) {
+  if (!term) return false;
+  if (term.type === 'var') return term.name === v;
+  if (term.type === 'quote') return isFreeInNode(v, term.inner);
+  if (term.type === 'lineref') return false;
+  return false;
+}
+
+// Full FOL parser: handles ∀/∃, connectives, atoms, identity, TFL
+function parseFOL(f) {
+  f = f.trim();
+  if (!f) return null;
+
+  // Strip matching outer parens
+  if (isWrappedInParens(f)) return parseFOL(f.slice(1, -1).trim());
+
+  // ⊥
+  if (f === '⊥') return { type: 'bot', formula: '⊥' };
+
+  // Quantifier: ∀x φ or ∃x φ
+  const qp = parseQuantPrefix(f);
+
+  // Binary connectives always take precedence over quantifier scope — this is the
+  // standard convention: ∃x Dx→P  means  (∃x Dx)→P  not  ∃x(Dx→P).
+  // Write ∃x(Dx→P) to bind the connective inside the quantifier scope.
+  // Scan right-to-left so lowest-precedence op (↔) wins at the top level.
+  const bin = splitOn(f, ['↔','→','∨','∧']);
+  if (bin) return { type: bin.op, left: parseFOL(bin.left), right: parseFOL(bin.right) };
+
+  if (qp) return { type: qp.quant, variable: qp.variable, scope: parseFOL(qp.rest) };
+
+  // Negation: ¬φ
+  if (f.startsWith('¬')) return { type: 'neg', sub: parseFOL(f.slice(1).trim()) };
+
+  // Identity: a = b  (two lowercase terms with =)
+  const idm = f.match(/^([a-z])\s*=\s*([a-z])$/);
+  if (idm) return { type: 'identity', formula: f.replace(/\s/g, ''), left: idm[1], right: idm[2] };
+
+  // Truth predicate: True(t) where t is a term (⌜φ⌝ or a plain variable).
+  // Uses paren-depth counting to find the matching ')' even when φ contains parens.
+  if (f.startsWith('True(')) {
+    let depth = 1, end = -1;
+    for (let i = 5; i < f.length; i++) {
+      if (f[i] === '(') depth++;
+      else if (f[i] === ')') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end === f.length - 1) {
+      const arg = parseTerm(f.slice(5, end).trim());
+      if (arg) return { type: 'true', arg };
+    }
+  }
+
+  // FOL atom: uppercase predicate letter(s) + zero or more lowercase term letters
+  // Predicate must be uppercase; terms are lowercase a-z
+  // Per spec: predicates are single uppercase other than A/E alone (those are quantifier shorthands)
+  if (/^[A-Z][a-z]*$/.test(f)) return { type: 'atom', formula: f };
+
+  // Sentential variable: single lowercase letter standing alone.
+  // The same letter may appear as a bound variable inside a quantifier scope, but
+  // when it fills a formula position on its own it is treated as a propositional atom.
+  // substNode and isFreeInNode are safe: their atom regex requires an uppercase prefix
+  // so they leave standalone lowercase atoms untouched.
+  if (/^[a-z]$/.test(f)) return { type: 'atom', formula: f };
+
+  // Nothing else is a WFF.
+  return null;
+}
+
+// Parse a formula (entry point): return parsed node or null
+function parse(f) {
+  f = normalizeFormula(f).trim();
+  if (!f) return null;
+  return parseFOL(f);
+}
+
+
+function formulasEqual(a, b) {
+  if (a == null || b == null) return false;
+  // Accept either a string or a parsed node object — convert to string first
+  const sa = (typeof a === 'object') ? unparse(a) : String(a);
+  const sb = (typeof b === 'object') ? unparse(b) : String(b);
+  // Canonicalise by round-tripping through the parser: this normalises
+  // operator/symbol spacing. Note: ∃x(Px∨Qx) and ∃x Px∨Qx parse differently
+  // under the standard convention (binary ops bind tighter than quantifier scope
+  // extension), so use explicit parens to control quantifier scope.
+  const canon = s => {
+    const node = parseFOL(normalizeFormula(s));
+    const unparsed = node ? unparse(node) : normalizeFormula(s);
+    return unparsed
+      .replace(/\s*(↔|→|∨|∧|∀|∃)\s*/g, '$1')
+      .replace(/\s+/g, '')
+      .trim();
+  };
+  return canon(sa) === canon(sb);
+}
+
+// Safely convert a parsed node OR a string to a display string
+function str(x) {
+  if (x == null) return '?';
+  if (typeof x === 'object') return unparse(x);
+  return String(x);
+}
+
+function collectPropositionalVars(node, vars = new Set()) {
+  if (!node) return false;
+  switch (node.type) {
+    case 'bot':
+      return true;
+    case 'atom':
+      // Accept uppercase propositional variables (e.g. P, Q) and
+      // single lowercase sentential variables (e.g. p, q, x).
+      // Reject predicate applications like Fx (uppercase + lowercase chars).
+      if (!/^[A-Z]+$/.test(node.formula) && !/^[a-z]$/.test(node.formula)) return false;
+      vars.add(node.formula);
+      return true;
+    case 'neg':
+      return collectPropositionalVars(node.sub, vars);
+    case '∧':
+    case '∨':
+    case '→':
+    case '↔':
+      return collectPropositionalVars(node.left, vars) && collectPropositionalVars(node.right, vars);
+    default:
+      return false;
+  }
+}
+
+function evalPropositionalNode(node, env) {
+  if (!node) return null;
+  switch (node.type) {
+    case 'bot': return false;
+    case 'atom': return !!env[node.formula];
+    case 'neg': return !evalPropositionalNode(node.sub, env);
+    case '∧': return evalPropositionalNode(node.left, env) && evalPropositionalNode(node.right, env);
+    case '∨': return evalPropositionalNode(node.left, env) || evalPropositionalNode(node.right, env);
+    case '→': return !evalPropositionalNode(node.left, env) || evalPropositionalNode(node.right, env);
+    case '↔': return evalPropositionalNode(node.left, env) === evalPropositionalNode(node.right, env);
+    default: return null;
+  }
+}
+
+function evaluatePropositionalFormula(formula, env) {
+  const node = parse(preprocessInput(formula));
+  if (!node) return null;
+  if (!collectPropositionalVars(node, new Set())) return null;
+  return evalPropositionalNode(node, env);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SATISFIABILITY CHECKER ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+// Collect all atomic propositions (TFL vars), FOL predicates, free variables,
+// and True(⌜n⌝) linerefs in a formula node.
+function satCollectAtoms(node, out) {
+  // out = { props: Set<string>, predicates: Map<name, arity>, freeVars: Set<string>, linerefs: Set<number> }
+  if (!node) return;
+  switch (node.type) {
+    case 'bot': break;
+    case 'atom': {
+      const f = node.formula;
+      // Single uppercase = propositional variable; UppercaseLowercase+ = predicate application
+      const m = f.match(/^([A-Z])([a-z]*)$/);
+      if (m) {
+        if (m[2].length === 0) {
+          out.props.add(f);        // TFL propositional variable
+        } else {
+          const terms = m[2].split('');
+          if (!out.predicates.has(m[1])) out.predicates.set(m[1], terms.length);
+          terms.forEach(t => out.freeVars.add(t));
+        }
+      } else {
+        // Multi-char predicate e.g. DDD
+        out.props.add(f);
+      }
+      break;
+    }
+    case 'identity':
+      out.freeVars.add(node.left);
+      out.freeVars.add(node.right);
+      break;
+    case 'neg': satCollectAtoms(node.sub, out); break;
+    case '∧': case '∨': case '→': case '↔':
+      satCollectAtoms(node.left, out);
+      satCollectAtoms(node.right, out);
+      break;
+    case '∀': case '∃':
+      // Bound variable: remove from freeVars (it's quantified)
+      satCollectAtoms(node.scope, out);
+      out.freeVars.delete(node.variable);
+      break;
+    case 'true':
+      if (node.arg.type === 'lineref') {
+        out.linerefs.add(node.arg.lineNum);
+      } else if (node.arg.type === 'quote') {
+        // True(⌜φ⌝): recurse into quoted formula to collect its atoms
+        satCollectAtoms(node.arg.inner, out);
+      }
+      break;
+  }
+}
+
+// Evaluate a formula node under a model.
+// model = {
+//   props:    { [name]: bool }     — TFL propositions
+//   ext:      { [pred]: Set<string> | Set<string> }  — predicates; for arity-1: Set of domain elements;
+//             for arity-n: Set of JSON-stringified n-tuples
+//   vars:     { [varName]: string } — current variable binding
+//   linerefs: { [n]: bool }         — truth value of "line n"
+//   domain:   string[]              — universe of discourse
+// }
+function satEval(node, model) {
+  if (!node) return null;
+  switch (node.type) {
+    case 'bot': return false;
+    case 'atom': {
+      const f = node.formula;
+      const m = f.match(/^([A-Z])([a-z]*)$/);
+      if (!m) return !!model.props[f];
+      if (m[2].length === 0) return !!model.props[f]; // TFL var
+      // FOL atom: look up each term in vars
+      const terms = m[2].split('').map(t => model.vars[t] !== undefined ? model.vars[t] : t);
+      const pred = m[1];
+      const ext = model.ext[pred];
+      if (!ext) return false;
+      if (terms.length === 1) return ext.has(terms[0]);
+      return ext.has(JSON.stringify(terms));
+    }
+    case 'identity': {
+      const l = model.vars[node.left]  !== undefined ? model.vars[node.left]  : node.left;
+      const r = model.vars[node.right] !== undefined ? model.vars[node.right] : node.right;
+      return l === r;
+    }
+    case 'neg':  return !satEval(node.sub, model);
+    case '∧':   return satEval(node.left, model) && satEval(node.right, model);
+    case '∨':   return satEval(node.left, model) || satEval(node.right, model);
+    case '→':   return !satEval(node.left, model) || satEval(node.right, model);
+    case '↔':   return satEval(node.left, model) === satEval(node.right, model);
+    case '∀': {
+      const v = node.variable;
+      return model.domain.every(d => {
+        const m2 = { ...model, vars: { ...model.vars, [v]: d } };
+        return satEval(node.scope, m2);
+      });
+    }
+    case '∃': {
+      const v = node.variable;
+      return model.domain.some(d => {
+        const m2 = { ...model, vars: { ...model.vars, [v]: d } };
+        return satEval(node.scope, m2);
+      });
+    }
+    case 'true': {
+      if (node.arg.type === 'lineref') {
+        return !!model.linerefs[node.arg.lineNum];
+      }
+      if (node.arg.type === 'quote') {
+        // True(⌜φ⌝) inherits φ's truth value
+        return satEval(node.arg.inner, model);
+      }
+      return false;
+    }
+  }
+  return null;
+}
+
+// Enumerate all 2^n propositional+lineref assignments and check tautology/sat/contradiction.
+// Only used when no quantifiers/predicates require a domain (purely propositional).
+function satSearchPropositional(node, atomKeys) {
+  const n = atomKeys.length;
+  let hasSat = false, hasUnsat = false;
+  for (let mask = 0; mask < (1 << n); mask++) {
+    const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+    atomKeys.forEach((k, i) => {
+      if (typeof k === 'number') model.linerefs[k] = !!(mask >> i & 1);
+      else model.props[k] = !!(mask >> i & 1);
+    });
+    const v = satEval(node, model);
+    if (v) hasSat = true; else hasUnsat = true;
+    if (hasSat && hasUnsat) break;
+  }
+  if (hasSat && !hasUnsat) return 'tautology';
+  if (!hasSat)             return 'contradiction';
+  return 'contingent';
+}
+
+// For FOL: enumerate all combinations of domain-element assignments to predicates.
+// fixedVars mirrors the free-variable assignments the user entered, so that free terms
+// (e.g. x in Fxb) resolve to the same domain elements during the exhaustive search as
+// they do during the point-evaluation — preventing spurious 'Contradiction' verdicts.
+// Returns 'tautology' | 'contradiction' | 'contingent' (or 'unknown' if domain too large).
+function satSearchFOL(node, atoms, domain, fixedVars = {}) {
+  // Safety cap: abort if search space is too large
+  const preds = [...atoms.predicates.entries()];
+  // For each predicate of arity k, the extension is a subset of domain^k.
+  // Number of possible extensions for pred of arity k = 2^(|domain|^k).
+  // We only search if total combinations ≤ 2^14 = 16384.
+  const totalBits = preds.reduce((acc, [, arity]) => acc + Math.pow(domain.length, arity), 0)
+                  + atoms.props.size + atoms.linerefs.size;
+  if (totalBits > 14) return 'unknown';
+
+  // Generate all possible extensions for each predicate
+  function domainTuples(arity) {
+    if (arity === 1) return domain.map(d => [d]);
+    const sub = domainTuples(arity - 1);
+    return domain.flatMap(d => sub.map(t => [d, ...t]));
+  }
+
+  // Each predicate extension is a bitmask over its tuples
+  const predTuples = preds.map(([, a]) => domainTuples(a));
+  const propKeys = [...atoms.props];
+  const linerefKeys = [...atoms.linerefs];
+
+  let hasSat = false, hasUnsat = false;
+
+  function enumerate(predIdx, extSoFar) {
+    if (hasSat && hasUnsat) return;
+    if (predIdx === preds.length) {
+      // Now enumerate propositional combos
+      const nProp = propKeys.length + linerefKeys.length;
+      for (let mask = 0; mask < (1 << nProp); mask++) {
+        const model = { props: {}, ext: extSoFar, vars: { ...fixedVars }, linerefs: {}, domain };
+        propKeys.forEach((k, i) => { model.props[k] = !!(mask >> i & 1); });
+        linerefKeys.forEach((k, i) => { model.linerefs[k] = !!(mask >> (propKeys.length + i) & 1); });
+        const v = satEval(node, model);
+        if (v) hasSat = true; else hasUnsat = true;
+        if (hasSat && hasUnsat) return;
+      }
+      return;
+    }
+    const [predName, ] = preds[predIdx];
+    const tuples = predTuples[predIdx];
+    const numTuples = tuples.length;
+    for (let mask = 0; mask < (1 << numTuples); mask++) {
+      const extSet = new Set();
+      for (let i = 0; i < numTuples; i++) {
+        if (mask >> i & 1) {
+          extSet.add(tuples[i].length === 1 ? tuples[i][0] : JSON.stringify(tuples[i]));
+        }
+      }
+      enumerate(predIdx + 1, { ...extSoFar, [predName]: extSet });
+      if (hasSat && hasUnsat) return;
+    }
+  }
+  enumerate(0, {});
+
+  if (hasSat && !hasUnsat) return 'tautology';
+  if (!hasSat)             return 'contradiction';
+  return 'contingent';
+}
+
+function checkPropositionalEntailment(premises, conclusion) {
+  const parsedPremises = premises.map(p => parse(preprocessInput(p)));
+  const parsedConclusion = parse(preprocessInput(conclusion));
+  if (parsedPremises.some(p => !p) || !parsedConclusion) {
+    return { supported: false, valid: false, reason: 'Parse failure in test case' };
+  }
+
+  const vars = new Set();
+  for (const p of parsedPremises) {
+    if (!collectPropositionalVars(p, vars)) {
+      return { supported: false, valid: false, reason: 'Premises are not purely propositional' };
+    }
+  }
+  if (!collectPropositionalVars(parsedConclusion, vars)) {
+    return { supported: false, valid: false, reason: 'Conclusion is not purely propositional' };
+  }
+
+  const names = [...vars];
+  const total = 1 << names.length;
+  for (let mask = 0; mask < total; mask++) {
+    const env = {};
+    for (let i = 0; i < names.length; i++) env[names[i]] = !!(mask & (1 << i));
+    const premisesTrue = parsedPremises.every(p => evalPropositionalNode(p, env));
+    if (!premisesTrue) continue;
+    const conclusionTrue = evalPropositionalNode(parsedConclusion, env);
+    if (!conclusionTrue) {
+      return { supported: true, valid: false, counterexample: env };
+    }
+  }
+  return { supported: true, valid: true, counterexample: null };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROOF CHECKER
+// ═══════════════════════════════════════════════════════════════
+
+// Parse justification string.
+// Handles: "→E 1,2" | "∀E 1 [x/a]" | "∃I 2 [a/x]" | "→I,[3-5]" | "Pr" | "As"
+function parseJust(s) {
+  s = s.trim();
+  if (!s) return null;
+  if (/^(Pr|premise|As|assumption)$/i.test(s)) return { rule: s.toUpperCase(), lines: [], subst: null };
+
+  // Normalise: strip a leading comma between rule name and line refs
+  s = s.replace(/^([^\d\[\s,]+),/, '$1 ');
+
+  // Extract optional substitution spec [x/t] or [t/x] at end
+  let subst = null;
+  const substMatch = s.match(/\[([a-w])\/([a-w])\]/);
+  if (substMatch) {
+    subst = { from: substMatch[1], to: substMatch[2] };
+    s = s.replace(substMatch[0], '').trim();
+  }
+
+  // Extract rule name (include = so that =E parses correctly)
+  const ruleMatch = s.match(/^([∀∃∧∨→↔¬⊥=\w]+)/); 
+  if (!ruleMatch) return null;
+  const rule = ruleMatch[1].trim();
+  const rest = s.slice(rule.length).trim();
+
+  // Collect line numbers (handles ranges like 3-5 and [3-5])
+  const lines = [];
+  const cleaned = rest.replace(/[\[\]]/g, ' ').replace(/[–—]/g, '-');
+  const tokens = cleaned.split(/[\s,]+/).filter(Boolean);
+  for (const tok of tokens) {
+    const rangeMatch = tok.match(/^(\d+)-(\d+)$/);
+    if (rangeMatch) {
+      lines.push(parseInt(rangeMatch[1]) - 1);
+      lines.push(parseInt(rangeMatch[2]) - 1);
+    } else {
+      const n = parseInt(tok);
+      if (!isNaN(n)) lines.push(n - 1);
+    }
+  }
+
+  return { rule, lines, subst };
+}
+
+// Given a line index, get all "accessible" lines from that position
+// A line is accessible if it is at depth <= current depth and not inside a closed subproof
+function accessibleLines(proof, fromIdx) {
+  const targetDepth = proof[fromIdx].depth;
+  const accessible = [];
+  // Go backwards
+  for (let i = fromIdx - 1; i >= 0; i--) {
+    const row = proof[i];
+    // Lines in deeper subproofs that have already closed are not accessible
+    if (row.depth > targetDepth) continue;
+    // Lines at same or lower depth are accessible (unless inside a now-closed subproof)
+    accessible.push(i);
+  }
+  return accessible;
+}
+
+function getFormulaAt(proof, idx) {
+  if (idx < 0 || idx >= proof.length) return null;
+  return normalizeFormula(proof[idx].formula ?? "");
+}
+
+// Collect all forward linerefs in a formula node: True(⌜n⌝) where n > idx+1 (1-based).
+// Linerefs inside a quoted term (True(⌜φ⌝)) are intentionally NOT traversed, because
+// inside a quotation the numeral is the *name* of a formula identity, not a direct
+// assertion about a specific proof line.
+function collectForwardLinerefs(node, idx) {
+  if (!node) return [];
+  if (node.type === 'true') {
+    if (node.arg.type === 'lineref') {
+      // Direct forward reference: True(⌜n⌝) where n is beyond this line
+      return node.arg.lineNum > idx + 1 ? [node.arg.lineNum] : [];
+    }
+    // Quote arg: don't descend into the quoted formula
+    return [];
+  }
+  switch (node.type) {
+    case 'atom': case 'bot': case 'identity': return [];
+    case 'neg': return collectForwardLinerefs(node.sub, idx);
+    case '∧': case '∨': case '→': case '↔':
+      return [...collectForwardLinerefs(node.left, idx), ...collectForwardLinerefs(node.right, idx)];
+    case '∀': case '∃': return collectForwardLinerefs(node.formula, idx);
+    default: return [];
+  }
+}
+
+// Returns a subproof range [assumptionIdx, lastLineIdx] if lines[0]..lines[1] form a valid subproof
+function getSubproofRange(proof, startIdx, endIdx) {
+  if (startIdx < 0 || endIdx < 0 || startIdx >= proof.length || endIdx >= proof.length) return null;
+  if (startIdx >= endIdx) return null;
+  const startRow = proof[startIdx];
+  const endRow = proof[endIdx];
+  if (startRow.type !== 'assumption') return null;
+  if (startRow.depth !== endRow.depth) return null;
+  // All lines between must be at >= startRow.depth
+  for (let i = startIdx + 1; i <= endIdx; i++) {
+    if (proof[i].depth < startRow.depth) return null;
+  }
+  return { assumption: getFormulaAt(proof, startIdx), conclusion: getFormulaAt(proof, endIdx) };
+}
+
+function checkLine(proof, idx) {
+  const row = proof[idx];
+  const just = row.justification.trim();
+
+  // Ban forward linerefs in any formula, including premises and assumptions.
+  // A formula like True(⌜5⌝) on line 2 refers to a line that does not yet exist;
+  // we cannot know what it will say, so the reference is meaningless.
+  if (row.formula.trim()) {
+    const _fwdParsed = parse(normalizeFormula(row.formula));
+    if (_fwdParsed) {
+      const _fwdRefs = collectForwardLinerefs(_fwdParsed, idx);
+      if (_fwdRefs.length > 0) {
+        return { ok: false, msg: `Formula references future line ${_fwdRefs[0]}, which has not been established yet` };
+      }
+    }
+  }
+
+  if (row.type === 'premise') return { ok: true, msg: 'Premise' };
+  if (row.type === 'assumption') {
+    if (!row.formula.trim()) return { ok: true, msg: 'Assumption (subproof)' };
+    const _assNode = parse(normalizeFormula(row.formula));
+    if (!_assNode) return { ok: false, msg: 'Hold up! In the Bryan Deduction system, you can only use WFFs as assumptions.' };
+    if (row.falsifiabilityVerified === false) {
+      return { ok: false, msg: row.falsifiabilityError || 'Hold up! In the Bryan Deduction system, you can only assume falsifiable statements — certify this assumption by providing a falsifying interpretation.' };
+    }
+    return { ok: true, msg: 'Assumption (subproof)' };
+  }
+  if (!row.formula.trim()) return { ok: false, msg: 'Empty formula' };
+  if (!just) return { ok: false, msg: 'No justification' };
+
+  const j = parseJust(just);
+  if (!j) return { ok: false, msg: 'Cannot parse justification' };
+
+  const f = normalizeFormula(row.formula);
+  const p = parse(f);
+  const lines = j.lines;
+
+  // Helper: get formula from referenced line (1-indexed → 0-indexed)
+  const L = (n) => getFormulaAt(proof, n);
+  const P = (n) => n >= 0 && n < proof.length ? parse(normalizeFormula(proof[n].formula)) : null;
+
+  // Check line reference accessibility
+  // Check line reference accessibility.
+  // True(⌜n⌝) via TI is warranted only if the formula on line n is currently established —
+  // i.e. accessible at the point of citation. Naming a discharged assumption does NOT make
+  // it true. So TI-lineref is subject to exactly the same scope rules as every other rule.
+  for (const li of lines) {
+    if (li < 0 || li >= proof.length) return { ok: false, msg: `Line ${li+1} does not exist` };
+    if (li >= idx) return { ok: false, msg: `Line ${li+1} cannot be referenced from line ${idx+1} (no self or forward references)` };
+    // Check it's accessible: a cited line is inaccessible once its enclosing subproof
+    // is closed. A subproof is closed when any line between the cited line and the current
+    // line has a depth strictly less than the cited line's depth. This handles both the
+    // standard case (cited line is deeper than current) and the sibling-subproof case
+    // (cited line is at the same depth as current but in a different, already-closed subproof).
+    {
+      const liDepth = proof[li].depth;
+      let subproofClosed = false;
+      for (let k = li + 1; k < idx; k++) {
+        if (proof[k].depth < liDepth) { subproofClosed = true; break; }
+      }
+      if (subproofClosed) return { ok: false, msg: `Line ${li+1} is inside a closed subproof and cannot be cited here` };
+    }
+  }
+
+  switch (j.rule.toUpperCase().replace('AND', '∧').replace('OR','∨')) {
+
+    case '∧I': case 'ANI': case 'AI': {
+      if (lines.length < 2) return { ok: false, msg: '∧I needs 2 line references' };
+      if (p?.type !== '∧') return { ok: false, msg: `Formula is not a conjunction` };
+      const lf = normalizeFormula(L(lines[0]) || ''), rf = normalizeFormula(L(lines[1]) || '');
+      const ok = (formulasEqual(p.left, lf) && formulasEqual(p.right, rf))
+              || (formulasEqual(p.left, rf) && formulasEqual(p.right, lf));
+      return ok ? { ok: true } : { ok: false, msg: `∧I: formula sides don't match lines ${lines[0]+1},${lines[1]+1}` };
+    }
+
+    case '∧E': case 'AE': {
+      if (lines.length < 1) return { ok: false, msg: '∧E needs 1 line reference' };
+      const conj = P(lines[0]);
+      if (conj?.type !== '∧') return { ok: false, msg: `Line ${lines[0]+1} is not a conjunction` };
+      if (formulasEqual(f, conj.left) || formulasEqual(f, conj.right)) return { ok: true };
+      return { ok: false, msg: `${f} is not a conjunct of ${L(lines[0])}` };
+    }
+
+    case '∨I': case 'OI': case 'VI': {
+      if (lines.length < 1) return { ok: false, msg: '∨I needs 1 line reference' };
+      if (p?.type !== '∨') return { ok: false, msg: 'Formula is not a disjunction' };
+      const lf2 = normalizeFormula(L(lines[0]) || '');
+      if (formulasEqual(p.left, lf2) || formulasEqual(p.right, lf2)) return { ok: true };
+      return { ok: false, msg: `Line ${lines[0]+1} matches neither disjunct` };
+    }
+
+    case '∨E': case 'OE': case 'VE': {
+      if (lines.length < 3) return { ok: false, msg: '∨E needs 3 line references: disjunction, end of sub1, end of sub2' };
+      const disj = P(lines[0]);
+      if (disj?.type !== '∨') return { ok: false, msg: `Line ${lines[0]+1} is not a disjunction` };
+      // lines[1] = last line of subproof 1, lines[2] = last line of subproof 2
+      const c1 = normalizeFormula(L(lines[1]) || '');
+      const c2 = normalizeFormula(L(lines[2]) || '');
+      if (!formulasEqual(c1, f)) return { ok: false, msg: `First subproof concludes ${c1}, not ${f}` };
+      if (!formulasEqual(c2, f)) return { ok: false, msg: `Second subproof concludes ${c2}, not ${f}` };
+      return { ok: true };
+    }
+
+    case '→I': case 'CI': case '>I': {
+      if (lines.length < 2) return { ok: false, msg: '→I needs 2 line references: start and end of subproof' };
+      if (p?.type !== '→') return { ok: false, msg: 'Formula is not a conditional' };
+      const sp = getSubproofRange(proof, lines[0], lines[1]);
+      if (!sp) return { ok: false, msg: `Lines ${lines[0]+1}–${lines[1]+1} are not a valid subproof (first line must be an assumption)` };
+      if (!formulasEqual(sp.assumption, p.left)) return { ok: false, msg: `Subproof assumption "${sp.assumption}" ≠ antecedent "${str(p.left)}"` };
+      if (!formulasEqual(sp.conclusion, p.right)) return { ok: false, msg: `Subproof conclusion "${sp.conclusion}" ≠ consequent "${str(p.right)}"` };
+      return { ok: true };
+    }
+
+    case '→E': case 'CE': case 'MP': {
+      if (lines.length < 2) return { ok: false, msg: '→E needs 2 line references' };
+      const impl = P(lines[0]);
+      if (impl?.type !== '→') {
+        // try reverse order
+        const impl2 = P(lines[1]);
+        if (impl2?.type !== '→') return { ok: false, msg: `Neither line ${lines[0]+1} nor ${lines[1]+1} is a conditional` };
+        const ante2 = normalizeFormula(L(lines[0]) || '');
+        if (!formulasEqual(impl2.left, ante2)) return { ok: false, msg: `"${ante2}" ≠ antecedent "${str(impl2.left)}"` };
+        if (!formulasEqual(impl2.right, f)) return { ok: false, msg: `Consequent is "${str(impl2.right)}", not "${f}"` };
+        return { ok: true };
+      }
+      const ante = normalizeFormula(L(lines[1]) || '');
+      if (!formulasEqual(impl.left, ante)) return { ok: false, msg: `"${ante}" ≠ antecedent "${str(impl.left)}"` };
+      if (!formulasEqual(impl.right, f)) return { ok: false, msg: `Consequent is "${str(impl.right)}", not "${f}"` };
+      return { ok: true };
+    }
+
+    case '↔I': case 'BI': case '<->I': {
+      if (lines.length < 2) return { ok: false, msg: '↔I needs 2 line references' };
+      if (p?.type !== '↔') return { ok: false, msg: 'Formula is not a biconditional' };
+      const l0 = P(lines[0]), l1 = P(lines[1]);
+      // Need P→Q and Q→P
+      const ok1 = l0?.type === '→' && l1?.type === '→'
+        && formulasEqual(l0.left, p.left) && formulasEqual(l0.right, p.right)
+        && formulasEqual(l1.left, p.right) && formulasEqual(l1.right, p.left);
+      const ok2 = l0?.type === '→' && l1?.type === '→'
+        && formulasEqual(l0.left, p.right) && formulasEqual(l0.right, p.left)
+        && formulasEqual(l1.left, p.left) && formulasEqual(l1.right, p.right);
+      return (ok1 || ok2) ? { ok: true } : { ok: false, msg: `Need lines P→Q and Q→P matching biconditional sides` };
+    }
+
+    case '↔E': case 'BE': case '<->E': {
+      if (lines.length < 2) return { ok: false, msg: '↔E needs 2 line references' };
+      const bic = P(lines[0]) || P(lines[1]);
+      const bicLine = (P(lines[0])?.type === '↔') ? lines[0] : lines[1];
+      const premLine = bicLine === lines[0] ? lines[1] : lines[0];
+      const bp = P(bicLine);
+      if (bp?.type !== '↔') return { ok: false, msg: 'One line must be a biconditional' };
+      const prem = normalizeFormula(L(premLine) || '');
+      if (formulasEqual(prem, bp.left) && formulasEqual(f, bp.right)) return { ok: true };
+      if (formulasEqual(prem, bp.right) && formulasEqual(f, bp.left)) return { ok: true };
+      return { ok: false, msg: `${prem} doesn't match either side of the biconditional` };
+    }
+
+    case '¬I': case 'NI': case '-I': {
+      if (lines.length < 2) return { ok: false, msg: '¬I needs 2 line refs: start and end of subproof' };
+      if (p?.type !== 'neg') return { ok: false, msg: 'Formula must be a negation' };
+      const sp2 = getSubproofRange(proof, lines[0], lines[1]);
+      if (!sp2) return { ok: false, msg: `Lines ${lines[0]+1}–${lines[1]+1} are not a valid subproof` };
+      const sp2AssumptionParsed = parse(sp2.assumption);
+      if (!formulasEqual(sp2AssumptionParsed ?? sp2.assumption, p.sub)) {
+        return { ok: false, msg: `Subproof assumes ${sp2.assumption}, not ${str(p.sub)}` };
+      }
+      if (sp2.conclusion !== '⊥') return { ok: false, msg: `Subproof must conclude ⊥, not ${sp2.conclusion}` };
+      return { ok: true };
+    }
+
+    case '¬E': case 'NE': case 'DNE': case '-E': {
+      if (lines.length < 1) return { ok: false, msg: '¬E needs 1 line reference' };
+      const neg = P(lines[0]);
+      if (neg?.type !== 'neg') return { ok: false, msg: `Line ${lines[0]+1} is not a negation` };
+      const innerneg = parse(unparse(neg.sub));
+      if (innerneg?.type !== 'neg') return { ok: false, msg: `Line ${lines[0]+1} is not a double negation ¬¬φ` };
+      if (!formulasEqual(unparse(innerneg.sub), f)) return { ok: false, msg: `Inner formula ${unparse(innerneg.sub)} ≠ ${f}` };
+      return { ok: true };
+    }
+
+    case '⊥I': case 'BOTI': case 'CONTRA': case 'NOT-E': {
+      // ⊥I: from φ (m) and ¬φ (n), derive ⊥
+      if (lines.length < 2) return { ok: false, msg: '⊥I needs 2 line references: φ and ¬φ' };
+      if (f !== '⊥') return { ok: false, msg: '⊥I can only justify ⊥ (contradiction)' };
+      const l0 = normalizeFormula(L(lines[0]) || '');
+      const l1 = normalizeFormula(L(lines[1]) || '');
+      const p0 = P(lines[0]);
+      const p1 = P(lines[1]);
+      // Check: one line is ¬φ and the other is φ
+      if (p0?.type === 'neg' && formulasEqual(p0.sub, p1)) return { ok: true };
+      if (p1?.type === 'neg' && formulasEqual(p1.sub, p0)) return { ok: true };
+      // Fallback: string-level unparse comparison
+      if (p0?.type === 'neg' && formulasEqual(unparse(p0.sub), l1)) return { ok: true };
+      if (p1?.type === 'neg' && formulasEqual(unparse(p1.sub), l0)) return { ok: true };
+      // Final fallback: raw string has ¬ prefix — strip it and compare canonically
+      if (l1.startsWith('¬') && formulasEqual(l1.slice(1).trim(), l0)) return { ok: true };
+      if (l0.startsWith('¬') && formulasEqual(l0.slice(1).trim(), l1)) return { ok: true };
+      return { ok: false, msg: `⊥I: line ${lines[0]+1} ("${l0}") and line ${lines[1]+1} ("${l1}") are not a contradictory pair φ and ¬φ` };
+    }
+
+    case 'X': case 'EFQ': case 'FALSO': {
+      if (lines.length < 1) return { ok: false, msg: 'X needs 1 line reference' };
+      if (normalizeFormula(L(lines[0]) || '') !== '⊥') return { ok: false, msg: `Line ${lines[0]+1} must be ⊥` };
+      return { ok: true }; // anything follows from ⊥
+    }
+
+    case 'IP': {
+      if (lines.length < 2) return { ok: false, msg: 'IP needs 2 line refs: start and end of subproof' };
+      const sp3 = getSubproofRange(proof, lines[0], lines[1]);
+      if (!sp3) return { ok: false, msg: `Lines ${lines[0]+1}–${lines[1]+1} are not a valid subproof` };
+      // Assumption should be ¬φ, conclusion ⊥, derive φ
+      const assumP = parse(sp3.assumption);
+      if (assumP?.type !== 'neg') return { ok: false, msg: `Subproof assumption must be a negation ¬φ` };
+      if (sp3.conclusion !== '⊥') return { ok: false, msg: `Subproof must conclude ⊥` };
+      const goalParsed = parse(f);
+      if (!formulasEqual(assumP.sub, goalParsed ?? f)) return { ok: false, msg: `¬φ assumption has φ = ${str(assumP.sub)}, not ${f}` };
+      return { ok: true };
+    }
+
+    case 'R': case 'REIT': {
+      if (lines.length < 1) return { ok: false, msg: 'R (Reiteration) needs 1 line reference' };
+      const refF = normalizeFormula(L(lines[0]) || '');
+      const refP = P(lines[0]);
+      if (!formulasEqual(p ?? f, refP ?? refF)) return { ok: false, msg: `Formula doesn't match line ${lines[0]+1}` };
+      return { ok: true };
+    }
+
+    // ══ UNIVERSAL QUANTIFIER ══
+
+    case '∀I': case 'UI': case 'FORALL-I': {
+      // ∀I m [c/x]  — from φc on line m, derive ∀x φx
+      // (c must not appear free in any undischarged assumption)
+      // Also accepts a subproof range: ∀I m-n [c/x] (uses line n as the φc instance)
+      if (lines.length < 1) return { ok: false, msg: '∀I needs a line reference, e.g. ∀I 3 [c/x]' };
+      if (p?.type !== '∀') return { ok: false, msg: 'Formula must be ∀x φ for ∀I' };
+
+      const boundVar = p.variable;  // x
+
+      // The line containing φc: if a range is given use the last line; otherwise the single line
+      const instanceIdx = lines.length >= 2 ? lines[1] : lines[0];
+      const instanceFormula = normalizeFormula(L(instanceIdx) || '');
+      if (!instanceFormula) return { ok: false, msg: `Line ${instanceIdx+1} is empty` };
+
+      // Determine c — from explicit [c/x] spec or auto-infer
+      let arbC = j.subst ? j.subst.from : null;
+      const xVar = j.subst ? j.subst.to : boundVar;
+
+      if (!arbC) {
+        // Auto-infer: find which constant in instanceFormula, when substituted for xVar
+        // in the scope of ∀xVar φ, reproduces instanceFormula
+        const allTerms = 'abcdefghijklmnopqrstuvwxyz'.split('');
+        for (const cand of allTerms) {
+          const candidate = substitute(unparse(p.scope), xVar, cand);
+          if (formulasEqual(candidate, instanceFormula)) { arbC = cand; break; }
+        }
+        if (!arbC) return { ok: false, msg: `∀I: cannot match line ${instanceIdx+1} ("${instanceFormula}") to ∀${boundVar} scope — specify the constant explicitly, e.g. ∀I ${instanceIdx+1} [c/${boundVar}]` };
+      }
+
+      // Verify: scope[xVar ↦ arbC] = instanceFormula
+      const scopeWithC = substitute(unparse(p.scope), xVar, arbC);
+      if (!formulasEqual(scopeWithC, instanceFormula)) {
+        return { ok: false, msg: `∀I: substituting ${xVar}→${arbC} in scope gives "${scopeWithC}", but line ${instanceIdx+1} is "${instanceFormula}"` };
+      }
+
+      // Check: arbC must not appear free in any undischarged assumption or premise
+      // (lines at current depth or shallower, before this line, not in a closed subproof)
+      for (let i = 0; i < idx; i++) {
+        const r = proof[i];
+        if (r.depth > proof[idx].depth) continue;
+        if ((r.type === 'premise' || r.type === 'assumption') && isFreeIn(arbC, r.formula)) {
+          return { ok: false, msg: `∀I: constant '${arbC}' appears free in the undischarged ${r.type} at line ${i+1} ("${r.formula}")` };
+        }
+      }
+
+      return { ok: true };
+    }
+
+    case '∀E': case 'UE': case 'FORALL-E': {
+      // ∀E m [x/t] — from ∀x φ, derive φ[t/x]
+      if (lines.length < 1) return { ok: false, msg: '∀E needs 1 line reference, e.g. ∀E 1 [x/a]' };
+      const univ = P(lines[0]);
+      if (univ?.type !== '∀') return { ok: false, msg: `Line ${lines[0]+1} must be a universal ∀x φ` };
+
+      const x2 = univ.variable;
+      let t = j.subst ? j.subst.to : null;
+      if (!t) {
+        // Try to infer t by comparing ∀x φ with conclusion
+        // Find what term was substituted: scope of univ with x replaced by each possible term
+        const possibleTerms = 'abcdefghijklmnopqrstuvwxyz'.split('');
+        for (const cand of possibleTerms) {
+          const candidate = substitute(unparse(univ.scope), x2, cand);
+          if (formulasEqual(candidate, f)) { t = cand; break; }
+        }
+        if (!t) return { ok: false, msg: `∀E: cannot infer substitution; specify e.g. ∀E ${lines[0]+1} [${x2}/a]` };
+      }
+
+      const derived = substitute(unparse(univ.scope), x2, t);
+      if (!formulasEqual(derived, f)) {
+        return { ok: false, msg: `∀E: substituting ${x2}→${t} in ∀${x2}φ gives "${derived}", not "${f}"` };
+      }
+      return { ok: true };
+    }
+
+    case '∃I': case 'EI': case 'EXISTS-I': {
+      // ∃I m [t/x] — from φ[t], derive ∃x φ[x]
+      if (lines.length < 1) return { ok: false, msg: '∃I needs 1 line reference, e.g. ∃I 1 [a/x]' };
+      if (p?.type !== '∃') return { ok: false, msg: 'Formula must be ∃x φ for ∃I' };
+
+      const x3 = p.variable;
+      const sourceLine = normalizeFormula(L(lines[0]) || '');
+
+      let t2 = j.subst ? j.subst.from : null;
+      if (!t2) {
+        // Try to infer t from source line
+        const possibleTerms = 'abcdefghijklmnopqrstuvwxyz'.split('');
+        for (const cand of possibleTerms) {
+          const candidate = substitute(unparse(p.scope), x3, cand);
+          if (formulasEqual(candidate, sourceLine)) { t2 = cand; break; }
+        }
+        if (!t2) return { ok: false, msg: `∃I: cannot infer substitution; specify e.g. ∃I ${lines[0]+1} [a/${x3}]` };
+      }
+
+      const derived2 = substitute(unparse(p.scope), x3, t2);
+      if (!formulasEqual(derived2, sourceLine)) {
+        return { ok: false, msg: `∃I: ∃${x3}φ with ${x3}→${t2} gives "${derived2}", but line ${lines[0]+1} is "${sourceLine}"` };
+      }
+      return { ok: true };
+    }
+
+    case '∃E': case 'EE': case 'EXISTS-E': {
+      // ∃E m i–j  — from ∃x φ (m) and subproof φ[c]⊢ψ (i–j), derive ψ
+      // lines[0] = existential, lines[1] = start of subproof, lines[2] = end of subproof
+      if (lines.length < 3) return { ok: false, msg: '∃E needs 3 line refs: ∃xφ line, subproof start, subproof end' };
+
+      const exist = P(lines[0]);
+      if (exist?.type !== '∃') return { ok: false, msg: `Line ${lines[0]+1} must be an existential ∃x φ` };
+
+      const sp4 = getSubproofRange(proof, lines[1], lines[2]);
+      if (!sp4) return { ok: false, msg: `Lines ${lines[1]+1}–${lines[2]+1} are not a valid subproof` };
+
+      // Subproof conclusion must equal derived formula
+      if (!formulasEqual(sp4.conclusion, f)) {
+        return { ok: false, msg: `∃E: subproof concludes "${sp4.conclusion}", not "${f}"` };
+      }
+
+      // Subproof assumption must be ∃x φ with x replaced by some constant c
+      const x4 = exist.variable;
+      const spAssump = sp4.assumption;
+      // Find c: try all terms until ∃x φ[c/x] matches the assumption
+      const possibleTerms2 = 'abcdefghijklmnopqrstuvwxyz'.split('');
+      let c2 = j.subst ? j.subst.from : null;
+      if (!c2) {
+        for (const cand of possibleTerms2) {
+          const candidate = substitute(unparse(exist.scope), x4, cand);
+          if (formulasEqual(candidate, spAssump)) { c2 = cand; break; }
+        }
+      }
+      if (!c2) return { ok: false, msg: `∃E: subproof assumption "${spAssump}" doesn't match ∃${x4}φ for any constant c` };
+
+      // Check c2 is not free in the conclusion ψ
+      if (isFreeIn(c2, f)) {
+        return { ok: false, msg: `∃E: the constant '${c2}' must not be free in the conclusion "${f}"` };
+      }
+
+      // Check c2 is not free in any undischarged assumption
+      for (let i = 0; i < idx; i++) {
+        const r = proof[i];
+        if (r.depth > proof[idx].depth) continue;
+        if ((r.type === 'premise' || r.type === 'assumption') && isFreeIn(c2, r.formula)) {
+          return { ok: false, msg: `∃E: constant '${c2}' appears free in undischarged assumption at line ${i+1}` };
+        }
+      }
+
+      return { ok: true };
+    }
+
+    case '=E': case 'IDE': case 'IDENTITY-E': {
+      if (lines.length < 2) return { ok: false, msg: '=E needs 2 line refs: identity and source formula' };
+
+      const pA = P(lines[0]);
+      const pB = P(lines[1]);
+
+      const identity = pA?.type === 'identity' ? pA : (pB?.type === 'identity' ? pB : null);
+      const identityLine = pA?.type === 'identity' ? lines[0] : lines[1];
+      const sourceLine = identityLine === lines[0] ? lines[1] : lines[0];
+
+      if (!identity) return { ok: false, msg: 'One referenced line must be an identity (a=b)' };
+
+      const source = normalizeFormula(L(sourceLine) || '');
+      const target = f;
+
+      const leftToRight = substitute(source, identity.left, identity.right);
+      const rightToLeft = substitute(source, identity.right, identity.left);
+
+      if (formulasEqual(leftToRight, target) || formulasEqual(rightToLeft, target)) {
+        return { ok: true };
+      }
+
+      return {
+        ok: false,
+        msg: `=E: substituting with ${identity.left}=${identity.right} in line ${sourceLine+1} does not yield ${target}`
+      };
+    }
+
+    case 'TI': case 'TRUE-I': {
+      // T-schema introduction.
+      // Two forms:
+      //   (a) True(⌜φ⌝)  — spell out the formula.   Justify: TI m  (line m must have φ)
+      //   (b) True(⌜n⌝)  — cite a line number.     Justify: TI n  (n must match the numeral)
+      if (p?.type !== 'true') return { ok: false, msg: 'Formula must be True(⌜…⌝) for TI' };
+      const { arg: tiArg } = p;
+      if (!tiArg) return { ok: false, msg: 'TI: missing argument inside ⌜⌝' };
+
+      if (tiArg.type === 'quote') {
+        // (a) formula-quote
+        if (lines.length < 1) return { ok: false, msg: 'TI needs 1 line reference (e.g. TI 3)' };
+        const tiPhi = normalizeFormula(L(lines[0]) || '');
+        const tiInner = unparse(tiArg.inner);
+        if (!formulasEqual(tiPhi, tiInner))
+          return { ok: false, msg: `TI: line ${lines[0]+1} is "“${tiPhi}”", but the quoted formula is "“${tiInner}”"` };
+        return { ok: true };
+      }
+
+      if (tiArg.type === 'lineref') {
+        const n    = tiArg.lineNum;   // 1-indexed line number the user typed
+        const nIdx = n - 1;           // 0-indexed
+
+        // Self-referential truth claims are not permitted.
+        if (nIdx === idx) return { ok: false, msg: `TI: True(⌜${n}⌝) on line ${n} — self-referential truth claims are not permitted. Use True(⌜φ⌝) with an explicit citation instead.` };
+
+        // Forward reference
+        if (nIdx > idx) return { ok: false, msg: `TI: ⌜${n}⌝ refers to future line ${n}` };
+
+        // Backward reference: the cited justification line must equal n
+        if (lines.length < 1) return { ok: false, msg: `TI: write "TI ${n}" to assert line ${n} is true` };
+        if (lines[0] !== nIdx) return { ok: false, msg: `TI: justification cites line ${lines[0]+1} but ⌜${n}⌝ names line ${n}` };
+        if (!(L(nIdx) || '').trim()) return { ok: false, msg: `TI: line ${n} is empty` };
+        return { ok: true };
+      }
+
+      return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝ or a line number ⌜n⌝' };
+    }
+
+    case 'TE': case 'TRUE-E': {
+      // T-schema elimination.
+      // Two forms:
+      //   (a) True(⌜φ⌝) on line m — derive φ.               Justify: TE m
+      //   (b) True(⌜n⌝)  on line m — derive formula on line n. Justify: TE m
+      if (lines.length < 1) return { ok: false, msg: 'TE needs 1 line reference (the line with True(⌜…⌝))' };
+      const teLine = P(lines[0]);
+      if (teLine?.type !== 'true') return { ok: false, msg: `Line ${lines[0]+1} must be True(⌜…⌝) for TE` };
+      const { arg: teArg } = teLine;
+      if (!teArg) return { ok: false, msg: 'TE: missing argument inside ⌜⌝' };
+
+      if (teArg.type === 'quote') {
+        // (a) formula-quote
+        const teInner = unparse(teArg.inner);
+        if (!formulasEqual(f, teInner))
+          return { ok: false, msg: `TE: quoted formula is "“${teInner}”", but current line is "“${f}”"` };
+        return { ok: true };
+      }
+
+      if (teArg.type === 'lineref') {
+        // (b) line-number reference — derive whatever is on that line
+        const n    = teArg.lineNum;
+        const nIdx = n - 1;
+        const refF = normalizeFormula(L(nIdx) || '');
+        if (!refF.trim()) return { ok: false, msg: `TE: line ${n} is empty` };
+        if (!formulasEqual(f, refF))
+          return { ok: false, msg: `TE: line ${n} has "“${refF}”", but current line is "“${f}”"` };
+        return { ok: true };
+      }
+
+      return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝ or a line number ⌜n⌝' };
+    }
+
+    default:
+      return { ok: false, msg: `Unknown rule: ${j.rule}` };
+  }
+}
+
+function checkProof() {
+  const results = proof.map((row, idx) => {
+    const r = checkLine(proof, idx);
+    return r;
+  });
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════
+
+function render() {
+  const tbody = document.getElementById('fitchBody');
+  tbody.innerHTML = '';
+
+  proof.forEach((row, idx) => {
+    const tr = document.createElement('tr');
+    tr.className = 'proof-row';
+    tr.dataset.idx = idx;
+
+    // Line number
+    const numTd = document.createElement('td');
+    numTd.className = 'td-num';
+    numTd.textContent = idx + 1;
+
+    // Depth / subproof bars
+    const depthTd = document.createElement('td');
+    depthTd.className = 'td-indent';
+    const indentDiv = document.createElement('div');
+    indentDiv.className = 'indent-cell';
+    for (let d = 0; d < row.depth; d++) {
+      const bar = document.createElement('div');
+      bar.className = 'subproof-bar';
+      const line = document.createElement('div');
+      line.className = 'bar-line';
+      bar.appendChild(line);
+      indentDiv.appendChild(bar);
+    }
+    depthTd.appendChild(indentDiv);
+
+    // Formula
+    const formTd = document.createElement('td');
+    formTd.className = 'td-formula';
+    if (row.type === 'assumption') formTd.classList.add('assumption-sep');
+    const formInput = document.createElement('input');
+    formInput.type = 'text';
+    formInput.className = 'formula-input' + (row.type === 'premise' ? ' is-premise' : '');
+    if (row.type === 'assumption' && row.falsifiabilityVerified === true)  formInput.classList.add('certify-ok');
+    if (row.type === 'assumption' && row.falsifiabilityVerified === false) formInput.classList.add('certify-pending');
+    formInput.value = row.formula;
+    formInput.placeholder = row.type === 'premise' ? 'Premise' : row.type === 'assumption' ? 'Assumption' : 'Formula';
+    formInput.addEventListener('focus', () => lastFocused = formInput);
+    formInput.addEventListener('input', e => {
+      proof[idx].formula = e.target.value;
+      if (proof[idx].type === 'assumption') {
+        proof[idx].falsifiabilityVerified = null;
+        formInput.classList.remove('certify-ok', 'certify-pending');
+        if (openCertifyIdx === idx) { openCertifyIdx = null; }
+      }
+      clearStatus();
+      scheduleSnapshot();
+    });
+    formInput.addEventListener('blur', e => {
+      proof[idx].formula = preprocessInput(e.target.value);
+      formInput.value = proof[idx].formula;
+      if (proof[idx].type === 'assumption' && proof[idx].formula) triggerAssumptionCertification(idx);
+    });
+    formTd.appendChild(formInput);
+
+    // Justification
+    const justTd = document.createElement('td');
+    justTd.className = 'td-just';
+    const justInput = document.createElement('input');
+    justInput.type = 'text';
+    justInput.className = 'just-input';
+    if (row.type === 'premise') {
+      justInput.value = 'Pr';
+      justInput.className += ' premise-label';
+      justInput.readOnly = true;
+    } else if (row.type === 'assumption') {
+      justInput.value = 'As';
+      justInput.className += ' premise-label';
+      justInput.readOnly = true;
       if (row.falsifiabilityVerified === true && row.falsifyingModel) {
         const ann = document.createElement('div');
         ann.title = 'Falsifying interpretation';
