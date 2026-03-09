@@ -641,14 +641,17 @@ header span {
 .sat-verdict.contingent  { color:#7a5c00; }
 .sat-verdict.contradiction { color:#9b1c1c; }
 
-/* ── Assumption certification modal ───────────────────────── */
-.certify-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
-.certify-overlay.hidden { display:none; }
-.certify-modal { background:var(--paper); border-radius:8px; box-shadow:0 8px 32px rgba(0,0,0,.3); padding:24px; max-width:540px; width:90%; max-height:82vh; overflow-y:auto; }
-.certify-modal h3 { margin:0 0 10px; font-size:1.05rem; }
-.certify-body { font-size:.88rem; margin-bottom:14px; color:var(--ink); line-height:1.6; }
-.certify-formula { font-family:var(--mono); background:#f4f4f4; border-radius:4px; padding:3px 7px; }
-.certify-result { font-size:.88rem; font-weight:600; }
+/* ── Assumption certification ─────────────────────────────── */
+.certify-lock-btn { background:none; border:none; cursor:pointer; font-size:1rem; padding:2px 4px; line-height:1; border-radius:4px; }
+.certify-lock-btn.pending { color:#e67e00; }
+.certify-lock-btn.ok      { color:#1a6e2e; }
+.certify-inline-tr td { background:#fffbf0; border-top:2px solid #f0ad4e; padding:12px 16px; }
+.certify-inline-tr.ok td { background:#f0faf3; border-top:2px solid #6dbb7a; }
+.certify-inline-header { font-size:.88rem; margin-bottom:10px; line-height:1.6; }
+.certify-formula { font-family:var(--mono); background:#f4f4f4; border-radius:4px; padding:2px 6px; }
+.certify-inline-fields { display:flex; flex-wrap:wrap; gap:10px 20px; align-items:flex-start; margin-bottom:10px; }
+.certify-inline-actions { display:flex; gap:8px; align-items:center; }
+.certify-result { font-size:.85rem; font-weight:600; }
 .certify-result.err { color:#9b1c1c; }
 .certify-result.ok  { color:#1a6e2e; }
 .formula-input.certify-pending { background:#fff8e1 !important; border-color:#f0ad4e !important; }
@@ -936,20 +939,6 @@ header span {
       </div>
     </div>
 
-  </div>
-</div>
-
-<!-- ASSUMPTION CERTIFICATION MODAL -->
-<div class="certify-overlay hidden" id="certifyOverlay">
-  <div class="certify-modal">
-    <h3>Certify Your Assumption</h3>
-    <div class="certify-body" id="certifyBody"></div>
-    <div id="certifyFields"></div>
-    <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-      <button class="btn btn-primary" id="certifyVerifyBtn">Verify</button>
-      <button class="btn" id="certifyCancelBtn">Cancel</button>
-      <span class="certify-result" id="certifyResult"></span>
-    </div>
   </div>
 </div>
 
@@ -2338,6 +2327,7 @@ function render() {
       if (proof[idx].type === 'assumption') {
         proof[idx].falsifiabilityVerified = null;
         formInput.classList.remove('certify-ok', 'certify-pending');
+        if (openCertifyIdx === idx) { openCertifyIdx = null; }
       }
       clearStatus();
       scheduleSnapshot();
@@ -2345,7 +2335,6 @@ function render() {
     formInput.addEventListener('blur', e => {
       proof[idx].formula = preprocessInput(e.target.value);
       formInput.value = proof[idx].formula;
-      if (proof[idx].type === 'assumption' && proof[idx].formula) triggerAssumptionCertification(idx);
     });
     formTd.appendChild(formInput);
 
@@ -2402,6 +2391,26 @@ function render() {
       actTd.appendChild(closeBtn);
     }
 
+    // 🔒 Certify button for uncertified assumptions
+    if (row.type === 'assumption' && row.formula) {
+      const lockBtn = document.createElement('button');
+      lockBtn.className = 'certify-lock-btn';
+      if (row.falsifiabilityVerified === true) {
+        lockBtn.textContent = '✓';
+        lockBtn.className += ' ok';
+        lockBtn.title = 'Assumption certified (falsifiable)';
+        lockBtn.disabled = true;
+      } else {
+        lockBtn.textContent = '🔒';
+        lockBtn.className += ' pending';
+        lockBtn.title = 'Certify this assumption is falsifiable';
+        lockBtn.addEventListener('click', () => {
+          triggerAssumptionCertification(idx);
+        });
+      }
+      actTd.appendChild(lockBtn);
+    }
+
     // delete (not premises)
     if (row.type !== 'premise') {
       const delBtn = document.createElement('button');
@@ -2414,6 +2423,12 @@ function render() {
 
     tr.append(numTd, depthTd, formTd, justTd, actTd);
     tbody.appendChild(tr);
+
+    // Inline certification strip (expands below the assumption row)
+    if (row.type === 'assumption' && openCertifyIdx === idx) {
+      const certTr = buildCertifyRow(idx, 5);
+      tbody.appendChild(certTr);
+    }
   });
 }
 
@@ -3564,11 +3579,11 @@ function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// Called on blur of an assumption formula input.
-// (1) Rejects non-WFFs immediately.
-// (2) Auto-detects propositional tautologies and rejects them.
-// (3) For everything else, opens the certification modal requiring the
-//     student to supply a falsifying interpretation.
+// openCertifyIdx holds the proof index whose inline strip is currently open (or null).
+let openCertifyIdx = null;
+
+// Called when the student blurs an assumption input that has a formula.
+// Validates WFF + detects propositional tautologies; sets proof row state; re-renders.
 function triggerAssumptionCertification(idx) {
   const f = proof[idx].formula;
   if (!f) return;
@@ -3576,6 +3591,7 @@ function triggerAssumptionCertification(idx) {
   if (!node) {
     proof[idx].falsifiabilityVerified = false;
     proof[idx].falsifiabilityError = 'Hold up! In the Bryan Deduction system, you can only use WFFs as assumptions.';
+    openCertifyIdx = null;
     render();
     return;
   }
@@ -3583,183 +3599,175 @@ function triggerAssumptionCertification(idx) {
   satCollectAtoms(node, atoms);
   const isFOL = atoms.predicates.size > 0 || containsQuantifier(node) || atoms.freeVars.size > 0;
 
-  // Auto-check for propositional tautology (¬φ would be a contradiction)
+  // Auto-check propositional tautology
   if (!isFOL) {
     const allKeys = [...atoms.props, ...atoms.linerefs];
     if (allKeys.length <= 14) {
       const negNode = { type: 'neg', sub: node };
-      const verdict = satSearchPropositional(negNode, allKeys);
-      if (verdict === 'contradiction') {
+      if (satSearchPropositional(negNode, allKeys) === 'contradiction') {
         proof[idx].falsifiabilityVerified = false;
         proof[idx].falsifiabilityError =
           'Hold up! "' + unparse(node) + '" is a tautology — in the Bryan Deduction system, you can only assume falsifiable statements.';
+        openCertifyIdx = null;
         render();
         return;
       }
     }
   }
 
-  // WFF and not a detected tautology — open modal for student to certify
+  // WFF and not a tautology — mark needing certification; open inline strip
   proof[idx].falsifiabilityVerified = false;
   proof[idx].falsifiabilityError =
-    'Hold up! In the Bryan Deduction system, you can only assume falsifiable statements — certify this assumption by providing a falsifying interpretation.';
-  openCertifyModal(idx, node, atoms, isFOL);
+    'Hold up! In the Bryan Deduction system, you can only assume falsifiable statements — use the 🔒 button to certify this assumption.';
+  proof[idx]._certAtoms = atoms;
+  proof[idx]._certIsFOL = isFOL;
+  openCertifyIdx = idx;
+  render();
 }
 
-let _certifyIdx = null, _certifyNode = null, _certifyAtoms = null, _certifyIsFOL = false;
+// Build the inline certification strip <tr> for the assumption at `idx`.
+function buildCertifyRow(idx, colSpan) {
+  const row = proof[idx];
+  const node = parse(row.formula);
+  const atoms = row._certAtoms || { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+  const isFOL = row._certIsFOL || false;
+  const formula = node ? unparse(node) : row.formula;
 
-function openCertifyModal(idx, node, atoms, isFOL) {
-  _certifyIdx   = idx;
-  _certifyNode  = node;
-  _certifyAtoms = atoms;
-  _certifyIsFOL = isFOL;
+  const tr = document.createElement('tr');
+  tr.className = 'certify-inline-tr';
+  const td = document.createElement('td');
+  td.colSpan = colSpan;
 
-  const formula = unparse(node);
-  document.getElementById('certifyBody').innerHTML =
-    'To use <span class="certify-formula">' + escapeHtml(formula) +
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'certify-inline-header';
+  hdr.innerHTML = 'To use <span class="certify-formula">' + escapeHtml(formula) +
     '</span> as an assumption in the Bryan Deduction system, you must provide an interpretation under which it is <strong>FALSE</strong>:';
+  td.appendChild(hdr);
 
-  const fields = document.getElementById('certifyFields');
-  fields.innerHTML = '';
+  // Fields
+  const fieldsDiv = document.createElement('div');
+  fieldsDiv.className = 'certify-inline-fields';
 
   if (isFOL) {
-    const row = document.createElement('div');
-    row.className = 'sat-domain-row';
-    const lbl = document.createElement('label'); lbl.textContent = 'Universe of discourse:';
-    const inp = document.createElement('input');
-    inp.id = 'certify-domain'; inp.type = 'text'; inp.placeholder = 'e.g.  a, b, c';
-    row.appendChild(lbl); row.appendChild(inp);
-    fields.appendChild(row);
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.85rem';
+    const lbl = document.createElement('label'); lbl.textContent = 'Universe:';
+    const inp = document.createElement('input'); inp.type = 'text';
+    inp.id = 'certify-domain-' + idx; inp.placeholder = 'e.g. a, b';
+    inp.style.cssText = 'font-family:var(--mono);font-size:.85rem;padding:3px 6px;width:120px;border:1px solid var(--border);border-radius:4px';
+    wrap.appendChild(lbl); wrap.appendChild(inp);
+    fieldsDiv.appendChild(wrap);
   }
 
   const propList = [...atoms.props].sort();
-  if (propList.length > 0) {
-    const sec = document.createElement('div');
-    sec.style.cssText = 'font-size:.8rem;color:var(--faint);margin:8px 0 4px';
-    sec.textContent = 'Propositional variables:';
-    fields.appendChild(sec);
-    propList.forEach(name => fields.appendChild(_certMakeTVRow(name)));
-  }
+  propList.forEach(name => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
+    const lbl = document.createElement('label'); lbl.style.fontFamily = 'var(--mono)'; lbl.textContent = name + ':';
+    const sel = document.createElement('select'); sel.id = 'certify-tv-' + idx + '-' + name;
+    sel.style.cssText = 'font-size:.85rem;padding:2px 4px';
+    ['T','F'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    wrap.appendChild(lbl); wrap.appendChild(sel);
+    fieldsDiv.appendChild(wrap);
+  });
 
-  if (atoms.predicates.size > 0) {
-    const sec = document.createElement('div');
-    sec.style.cssText = 'font-size:.8rem;color:var(--faint);margin:8px 0 4px';
-    sec.textContent = 'Predicate extensions:';
-    fields.appendChild(sec);
-    atoms.predicates.forEach((arity, pred) => {
-      const w = document.createElement('div'); w.className = 'sat-ext-row';
-      const lbl = document.createElement('label');
-      lbl.textContent = pred + (arity > 1 ? ' (arity ' + arity + ')' : '');
-      const col = document.createElement('div'); col.style.flex = '1';
-      const inp = document.createElement('input'); inp.type = 'text';
-      inp.id = 'certify-ext-' + pred;
-      inp.placeholder = arity === 1 ? 'e.g.  a, b' : 'e.g.  (a,b)';
-      col.appendChild(inp); w.appendChild(lbl); w.appendChild(col);
-      fields.appendChild(w);
-    });
-  }
+  atoms.predicates.forEach((arity, pred) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
+    const lbl = document.createElement('label'); lbl.style.fontFamily = 'var(--mono)';
+    lbl.textContent = pred + (arity > 1 ? '/' + arity : '') + ':';
+    const inp = document.createElement('input'); inp.type = 'text';
+    inp.id = 'certify-ext-' + idx + '-' + pred;
+    inp.placeholder = arity === 1 ? 'e.g. a, b' : 'e.g. (a,b)';
+    inp.style.cssText = 'font-family:var(--mono);font-size:.85rem;padding:3px 6px;width:110px;border:1px solid var(--border);border-radius:4px';
+    wrap.appendChild(lbl); wrap.appendChild(inp);
+    fieldsDiv.appendChild(wrap);
+  });
 
   const freeList = [...atoms.freeVars].sort();
-  if (freeList.length > 0) {
-    const sec = document.createElement('div');
-    sec.style.cssText = 'font-size:.8rem;color:var(--faint);margin:8px 0 4px';
-    sec.textContent = 'Free variable assignments:';
-    fields.appendChild(sec);
-    freeList.forEach(v => {
-      const div = document.createElement('div'); div.className = 'sat-assign-row';
-      const lbl = document.createElement('label'); lbl.textContent = v + ' =';
-      const inp = document.createElement('input'); inp.type = 'text';
-      inp.id = 'certify-var-' + v; inp.placeholder = 'domain element'; inp.style.width = '80px';
-      div.appendChild(lbl); div.appendChild(inp);
-      fields.appendChild(div);
-    });
-  }
-
-  document.getElementById('certifyResult').textContent = '';
-  document.getElementById('certifyResult').className = 'certify-result';
-  document.getElementById('certifyOverlay').classList.remove('hidden');
-}
-
-function closeCertifyModal() {
-  document.getElementById('certifyOverlay').classList.add('hidden');
-  _certifyIdx = null;
-}
-
-function _certMakeTVRow(name) {
-  const div = document.createElement('div'); div.className = 'sat-assign-row';
-  const lbl = document.createElement('label'); lbl.textContent = name;
-  const sel = document.createElement('select'); sel.id = 'certify-tv-' + name;
-  ['T','F'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
-  div.appendChild(lbl); div.appendChild(sel);
-  return div;
-}
-
-document.getElementById('certifyVerifyBtn').addEventListener('click', () => {
-  if (_certifyIdx === null || !_certifyNode) return;
-  const result = document.getElementById('certifyResult');
-  const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
-
-  if (_certifyIsFOL) {
-    const rawDomain = (document.getElementById('certify-domain')?.value || '').trim();
-    if (!rawDomain) { result.textContent = 'Please enter a universe of discourse.'; result.className = 'certify-result err'; return; }
-    model.domain = rawDomain.split(',').map(s => s.trim()).filter(Boolean);
-  }
-
-  _certifyAtoms.props.forEach(name => {
-    const sel = document.getElementById('certify-tv-' + name);
-    model.props[name] = sel ? sel.value === 'T' : false;
+  freeList.forEach(v => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
+    const lbl = document.createElement('label'); lbl.style.fontFamily = 'var(--mono)';
+    lbl.textContent = v + ' =';
+    const inp = document.createElement('input'); inp.type = 'text';
+    inp.id = 'certify-var-' + idx + '-' + v;
+    inp.placeholder = 'element'; inp.style.cssText = 'font-family:var(--mono);font-size:.85rem;padding:3px 6px;width:70px;border:1px solid var(--border);border-radius:4px';
+    wrap.appendChild(lbl); wrap.appendChild(inp);
+    fieldsDiv.appendChild(wrap);
   });
 
-  let extErr = null;
-  _certifyAtoms.predicates.forEach((arity, pred) => {
-    if (extErr) return;
-    const inp = document.getElementById('certify-ext-' + pred);
-    const raw = inp ? inp.value.trim() : '';
-    if (arity === 1) {
-      model.ext[pred] = new Set(raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []);
-    } else {
-      const extSet = new Set();
-      if (raw) {
-        const tupleRe = /\(([^)]+)\)/g; let m;
-        while ((m = tupleRe.exec(raw)) !== null) {
-          const parts = m[1].split(',').map(s => s.trim());
-          if (parts.length !== arity) { extErr = 'Tuple has ' + parts.length + ' elements, expected ' + arity + '.'; return; }
-          extSet.add(JSON.stringify(parts));
+  td.appendChild(fieldsDiv);
+
+  // Actions
+  const actDiv = document.createElement('div');
+  actDiv.className = 'certify-inline-actions';
+  const verifyBtn = document.createElement('button');
+  verifyBtn.className = 'btn btn-primary'; verifyBtn.textContent = 'Verify';
+  const resultSpan = document.createElement('span'); resultSpan.className = 'certify-result';
+
+  verifyBtn.addEventListener('click', () => {
+    const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+
+    if (isFOL) {
+      const rawDomain = (document.getElementById('certify-domain-' + idx)?.value || '').trim();
+      if (!rawDomain) { resultSpan.textContent = 'Please enter a universe of discourse.'; resultSpan.className = 'certify-result err'; return; }
+      model.domain = rawDomain.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    propList.forEach(name => {
+      const sel = document.getElementById('certify-tv-' + idx + '-' + name);
+      model.props[name] = sel ? sel.value === 'T' : false;
+    });
+
+    let extErr = null;
+    atoms.predicates.forEach((arity, pred) => {
+      if (extErr) return;
+      const inp = document.getElementById('certify-ext-' + idx + '-' + pred);
+      const raw = inp ? inp.value.trim() : '';
+      if (arity === 1) {
+        model.ext[pred] = new Set(raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : []);
+      } else {
+        const extSet = new Set();
+        if (raw) {
+          const tupleRe = /\(([^)]+)\)/g; let m;
+          while ((m = tupleRe.exec(raw)) !== null) {
+            const parts = m[1].split(',').map(s => s.trim());
+            if (parts.length !== arity) { extErr = 'Tuple arity mismatch for ' + pred + '.'; return; }
+            extSet.add(JSON.stringify(parts));
+          }
         }
+        model.ext[pred] = extSet;
       }
-      model.ext[pred] = extSet;
+    });
+    if (extErr) { resultSpan.textContent = extErr; resultSpan.className = 'certify-result err'; return; }
+
+    freeList.forEach(v => {
+      const inp = document.getElementById('certify-var-' + idx + '-' + v);
+      model.vars[v] = inp ? inp.value.trim() : v;
+    });
+
+    if (!node) { resultSpan.textContent = 'Invalid formula.'; resultSpan.className = 'certify-result err'; return; }
+    const val = satEval(node, model);
+    if (val === null) { resultSpan.textContent = 'Could not evaluate — check inputs.'; resultSpan.className = 'certify-result err'; return; }
+    if (val === false) {
+      proof[idx].falsifiabilityVerified = true;
+      proof[idx].falsifiabilityError = null;
+      openCertifyIdx = null;
+      render();
+    } else {
+      resultSpan.textContent = '✗ Formula is TRUE here — try a different interpretation.';
+      resultSpan.className = 'certify-result err';
     }
   });
-  if (extErr) { result.textContent = extErr; result.className = 'certify-result err'; return; }
 
-  _certifyAtoms.freeVars.forEach(v => {
-    const inp = document.getElementById('certify-var-' + v);
-    model.vars[v] = inp ? inp.value.trim() : v;
-  });
-
-  const val = satEval(_certifyNode, model);
-  if (val === null) {
-    result.textContent = 'Could not evaluate — check your inputs.';
-    result.className = 'certify-result err';
-    return;
-  }
-  if (val === false) {
-    proof[_certifyIdx].falsifiabilityVerified = true;
-    proof[_certifyIdx].falsifiabilityError = null;
-    result.textContent = '✓ Verified! This interpretation falsifies the assumption.';
-    result.className = 'certify-result ok';
-    render();
-    setTimeout(closeCertifyModal, 900);
-  } else {
-    result.textContent = '✗ The formula is TRUE under this interpretation — try a different one.';
-    result.className = 'certify-result err';
-  }
-});
-
-document.getElementById('certifyCancelBtn').addEventListener('click', closeCertifyModal);
-document.getElementById('certifyOverlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('certifyOverlay')) closeCertifyModal();
-});
+  actDiv.appendChild(verifyBtn);
+  actDiv.appendChild(resultSpan);
+  td.appendChild(actDiv);
+  tr.appendChild(td);
+  return tr;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // SATISFIABILITY CHECKER UI
