@@ -802,6 +802,29 @@ header span {
       <div class="panel-body" style="padding:0;">
 
         <div class="fol-section">
+          <div class="fol-section-title">Recursive definition of a WFF</div>
+          <div class="fol-note" style="line-height:1.7">
+            <strong>Base cases</strong> — each of the following is a WFF:
+            <ol style="margin:.4em 0 .6em 1.4em; padding:0">
+              <li><code>⊥</code> &mdash; the falsum constant</li>
+              <li>Any single uppercase letter (<code>A</code>–<code>Z</code>) standing alone &mdash; a propositional variable</li>
+              <li>Any single lowercase letter (<code>a</code>–<code>z</code>) standing alone &mdash; a sentential variable</li>
+              <li>An uppercase letter followed by one or more lowercase term letters (e.g. <code>Fx</code>, <code>Gxy</code>) &mdash; a predicate application. (<code>Ax</code> and <code>Ex</code> are reserved for quantifier shorthands and are not WFFs.)</li>
+              <li><code>t<sub>1</sub> = t<sub>2</sub></code> where t<sub>1</sub> and t<sub>2</sub> are lowercase term letters &mdash; an identity statement</li>
+              <li><code>True(⌜n⌝)</code> where n is a positive integer &mdash; the truth predicate applied to a line-number reference. (The proof-time constraint that line n must contain a WFF is a semantic condition, not a grammatical one.)</li>
+            </ol>
+            <strong>Recursive cases</strong> — if φ and ψ are WFFs and x is a variable, then so are:
+            <ol style="margin:.4em 0 .6em 1.4em; padding:0" start="7">
+              <li><code>True(⌜φ⌝)</code> &mdash; the truth predicate applied to a quasi-quoted WFF</li>
+              <li><code>¬φ</code></li>
+              <li><code>(φ ∧ ψ)</code>, <code>(φ ∨ ψ)</code>, <code>(φ → ψ)</code>, <code>(φ ↔ ψ)</code></li>
+              <li><code>∀x φ</code>, <code>∃x φ</code></li>
+            </ol>
+            Nothing else is a WFF.
+          </div>
+        </div>
+
+        <div class="fol-section">
           <div class="fol-section-title">Atomic sentences</div>
           <table class="fol-table">
             <tr><td class="fol-ex"><code>P</code></td><td>TFL sentence letter</td></tr>
@@ -859,6 +882,7 @@ header span {
           <table class="fol-table">
             <tr><td class="fol-ex"><code>⌜φ⌝</code></td><td>Name of formula φ (a term)</td></tr>
             <tr><td class="fol-ex"><code>True(⌜φ⌝)</code></td><td>Truth predicate: φ is true</td></tr>
+            <tr><td class="fol-ex"><code>True(⌜n⌝)</code></td><td>Truth predicate: the formula on proof line n is true (n must refer to the line of a WFF)</td></tr>
             <tr><td class="fol-ex"><code>∀x True(⌜Fx⌝)</code></td><td>Every Fx-instance is true</td></tr>
           </table>
           <div class="fol-note">⌜φ⌝ is a <em>quasi-quotation</em> term denoting φ. Unlike opaque quotation, variables inside ⌜⌝ still participate in substitution: instantiating x→a in ∀x&nbsp;True(⌜Fx⌝) yields True(⌜Fa⌝). Use the ⌜ ⌝ buttons in the symbol bar above.</div>
@@ -1227,7 +1251,7 @@ function parseTerm(s) {
     }
     if (end === s.length - 1) {
       const innerStr = s.slice(1, end).trim();
-      // ⌜n⌝ where n is a positive integer — a line-number reference
+      // ⌜n⌝ where n is a positive integer referring to the proof line of a WFF — a line-number reference
       if (/^\d+$/.test(innerStr)) return { type: 'lineref', lineNum: parseInt(innerStr, 10) };
       // ⌜φ⌝ — a quasi-quoted formula
       const inner = parseFOL(innerStr);
