@@ -2335,6 +2335,7 @@ function render() {
     formInput.addEventListener('blur', e => {
       proof[idx].formula = preprocessInput(e.target.value);
       formInput.value = proof[idx].formula;
+      if (proof[idx].type === 'assumption' && proof[idx].formula) triggerAssumptionCertification(idx);
     });
     formTd.appendChild(formInput);
 
