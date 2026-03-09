@@ -1460,11 +1460,16 @@ function checkLine(proof, idx) {
   for (const li of lines) {
     if (li < 0 || li >= proof.length) return { ok: false, msg: `Line ${li+1} does not exist` };
     if (li >= idx) return { ok: false, msg: `Line ${li+1} cannot be referenced from line ${idx+1} (no self or forward references)` };
-    // Check it's accessible (not in a closed subproof deeper than current)
-    if (proof[li].depth > row.depth) {
+    // Check it's accessible: a cited line is inaccessible once its enclosing subproof
+    // is closed. A subproof is closed when any line between the cited line and the current
+    // line has a depth strictly less than the cited line's depth. This handles both the
+    // standard case (cited line is deeper than current) and the sibling-subproof case
+    // (cited line is at the same depth as current but in a different, already-closed subproof).
+    {
+      const liDepth = proof[li].depth;
       let subproofClosed = false;
       for (let k = li + 1; k < idx; k++) {
-        if (proof[k].depth <= row.depth) { subproofClosed = true; break; }
+        if (proof[k].depth < liDepth) { subproofClosed = true; break; }
       }
       if (subproofClosed) return { ok: false, msg: `Line ${li+1} is inside a closed subproof and cannot be cited here` };
     }
@@ -2169,15 +2174,20 @@ document.getElementById('checkBtn').addEventListener('click', () => {
     }
   });
 
-  // Check if last non-empty formula matches conclusion
+  // Check if last non-empty formula matches conclusion and is at top level (depth 0)
   const stepsWithFormulas = proof.filter(r => r.formula.trim());
-  const lastFormula = stepsWithFormulas.length ? normalizeFormula(stepsWithFormulas[stepsWithFormulas.length-1].formula) : '';
+  const lastStep = stepsWithFormulas.length ? stepsWithFormulas[stepsWithFormulas.length-1] : null;
+  const lastFormula = lastStep ? normalizeFormula(lastStep.formula) : '';
   const concludes = formulasEqual(lastFormula, conclusionFormula);
+  const atTopLevel = lastStep ? lastStep.depth === 0 : false;
 
   const st = document.getElementById('proofStatus');
-  if (allOk && concludes) {
+  if (allOk && concludes && atTopLevel) {
     st.className = 'proof-status ok';
     st.textContent = '✓ Proof is valid! The conclusion is established.';
+  } else if (allOk && concludes && !atTopLevel) {
+    st.className = 'proof-status incomplete';
+    st.textContent = `⚠ The conclusion appears on the last line, but it is inside an open subproof. Close all subproofs before the proof can be considered complete.`;
   } else if (allOk && !concludes) {
     st.className = 'proof-status incomplete';
     st.textContent = `⚠ All rules applied correctly, but the last line (${lastFormula || 'empty'}) doesn't match the conclusion (${conclusionFormula}). Keep going!`;
@@ -2353,8 +2363,10 @@ function runDevSelfTests() {
     });
 
     const nonEmpty = scriptedProof.filter(r => (r.formula || '').trim());
-    const lastFormula = nonEmpty.length ? normalizeFormula(nonEmpty[nonEmpty.length - 1].formula) : '';
+    const lastStep = nonEmpty.length ? nonEmpty[nonEmpty.length - 1] : null;
+    const lastFormula = lastStep ? normalizeFormula(lastStep.formula) : '';
     const concludes = formulasEqual(lastFormula, preprocessInput(testCase.conclusion));
+    const atTopLevel = lastStep ? lastStep.depth === 0 : false;
 
     if (lineFailures.length) {
       return { ok: false, details: lineFailures.join(' | ') };
@@ -2363,6 +2375,12 @@ function runDevSelfTests() {
       return {
         ok: false,
         details: `last line "${lastFormula || '∅'}" does not match conclusion "${preprocessInput(testCase.conclusion)}"`
+      };
+    }
+    if (!atTopLevel) {
+      return {
+        ok: false,
+        details: `conclusion reached at depth ${lastStep.depth} (inside open subproof), not at top level`
       };
     }
     return { ok: true, details: '' };
@@ -2928,6 +2946,115 @@ function runDevSelfTests() {
         ];
         const r = checkLine(fakeProof, 5);
         return { ok: r.ok === false, details: r.ok ? 'checker incorrectly accepted True(⌜1⌝) citing a discharged assumption' : '' };
+      }
+    },
+
+    // ── Negative / overgeneration regression tests ──────────────────────────────
+    // Each test verifies that the checker REJECTS a proof step that should be
+    // invalid. The test passes (ok: true) only when the checker correctly rejects.
+
+    {
+      name: 'Negative #1: sibling-subproof line cannot be cited',
+      _inline: () => {
+        // Subproof A (lines 1-2, depth 1) is discharged at line 3 (depth 0) via →I.
+        // Subproof B starts at line 4 (depth 1). Line 5 tries to reiterate line 2,
+        // which lives inside the now-closed sibling subproof A. Must fail.
+        const fakeProof = [
+          { type: 'assumption', formula: 'P',     justification: 'As',    depth: 1 }, // idx 0
+          { type: 'step',       formula: 'P',     justification: 'R 1',   depth: 1 }, // idx 1 — inside A
+          { type: 'step',       formula: 'P → P', justification: '→I 1-2', depth: 0 }, // idx 2 — closes A
+          { type: 'assumption', formula: 'Q',     justification: 'As',    depth: 1 }, // idx 3 — start B
+          { type: 'step',       formula: 'P',     justification: 'R 2',   depth: 1 }, // idx 4 — cites idx 1 (closed A)
+        ];
+        const r = checkLine(fakeProof, 4);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'checker incorrectly accepted a reiteration from a closed sibling subproof' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #2: proof is not complete when conclusion is inside an open subproof',
+      _inline: () => {
+        // Every individual line is rule-correct, but the proof ends inside a depth-1
+        // subproof. A valid completed proof requires the conclusion at depth 0.
+        const fakeProof = [
+          { type: 'assumption', formula: 'P', justification: 'As',  depth: 1 }, // idx 0
+          { type: 'step',       formula: 'P', justification: 'R 1', depth: 1 }, // idx 1 — conclusion inside subproof
+        ];
+        const lineResults = fakeProof.map((_, i) => checkLine(fakeProof, i));
+        const allLinesOk = lineResults.every(r => r.ok);
+        const lastStep = fakeProof[fakeProof.length - 1];
+        const proofIsValid = allLinesOk && lastStep.depth === 0;
+        return {
+          ok: !proofIsValid,
+          details: proofIsValid ? 'incorrectly accepted a proof whose conclusion is only established inside an open subproof' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #3: TI with mismatched quoted formula must fail',
+      _inline: () => {
+        // Line 1 has P, but we try to introduce True(⌜Q⌝) — Q ≠ P.
+        const fakeProof = [
+          { type: 'premise', formula: 'P',         justification: 'Pr',   depth: 0 }, // idx 0
+          { type: 'step',    formula: 'True(⌜Q⌝)', justification: 'TI 1', depth: 0 }, // idx 1 — wrong
+        ];
+        const r = checkLine(fakeProof, 1);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'TI incorrectly accepted True(⌜Q⌝) when the cited line contains P (P ≠ Q)' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #4: TE producing wrong formula must fail',
+      _inline: () => {
+        // True(⌜P⌝) on line 1; TE should yield P, but we write Q instead.
+        const fakeProof = [
+          { type: 'premise', formula: 'True(⌜P⌝)', justification: 'Pr',   depth: 0 }, // idx 0
+          { type: 'step',    formula: 'Q',           justification: 'TE 1', depth: 0 }, // idx 1 — wrong
+        ];
+        const r = checkLine(fakeProof, 1);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'TE incorrectly accepted Q from True(⌜P⌝) (P ≠ Q)' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #5: ∧E applied to a disjunction must fail',
+      _inline: () => {
+        const fakeProof = [
+          { type: 'premise', formula: 'P ∨ Q', justification: 'Pr',   depth: 0 }, // idx 0
+          { type: 'step',    formula: 'P',      justification: '∧E 1', depth: 0 }, // idx 1 — wrong rule
+        ];
+        const r = checkLine(fakeProof, 1);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? '∧E incorrectly accepted on a disjunction (P ∨ Q)' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Negative #6: ⊥I from a non-contradictory pair must fail',
+      _inline: () => {
+        // P and Q are not contradictory (neither is the negation of the other).
+        const fakeProof = [
+          { type: 'premise', formula: 'P', justification: 'Pr',      depth: 0 }, // idx 0
+          { type: 'premise', formula: 'Q', justification: 'Pr',      depth: 0 }, // idx 1
+          { type: 'step',    formula: '⊥', justification: '⊥I 1,2', depth: 0 }, // idx 2 — invalid
+        ];
+        const r = checkLine(fakeProof, 2);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? '⊥I incorrectly derived ⊥ from non-contradictory premises P and Q' : ''
+        };
       }
     }
   ];
