@@ -2262,13 +2262,24 @@ function checkLine(proof, idx) {
       }
 
       if (teArg.type === 'lineref') {
-        // (b) line-number reference — derive whatever is on that line
+        // (b) line-number reference — derive whatever is on that line.
+        // The target line must be accessible (not inside a closed subproof).
+        // Without this check, TE could retrieve a discharged assumption's formula
+        // at main-proof depth, enabling Liar-style contradictions.
         const n    = teArg.lineNum;
         const nIdx = n - 1;
+        if (nIdx >= 0 && nIdx < proof.length) {
+          const teTargetDepth = proof[nIdx].depth;
+          let teTargetClosed = false;
+          for (let k = nIdx + 1; k < idx; k++) {
+            if (proof[k].depth < teTargetDepth) { teTargetClosed = true; break; }
+          }
+          if (teTargetClosed) return { ok: false, msg: `TE: line ${n} is inside a closed subproof — its formula cannot be extracted here` };
+        }
         const refF = normalizeFormula(L(nIdx) || '');
         if (!refF.trim()) return { ok: false, msg: `TE: line ${n} is empty` };
         if (!formulasEqual(f, refF))
-          return { ok: false, msg: `TE: line ${n} has "“${refF}”", but current line is "“${f}”"` };
+          return { ok: false, msg: `TE: line ${n} has ""${refF}"", but current line is ""${f}""` };
         return { ok: true };
       }
 
