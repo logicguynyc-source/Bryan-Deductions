@@ -821,7 +821,7 @@ header span {
         <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
         <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
         <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
-        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> (formula) or <code>True(⌜n⌝)</code> (line number) to assert truth. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝) or True(⌜m⌝). <strong>TI</strong> (no number): self-referential truth-teller True(⌜n⌝) on line n. <strong>TE m</strong>: from True(⌜φ⌝) or True(⌜n⌝) on line m, derive the named formula. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
+        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> (formula) or <code>True(⌜n⌝)</code> (line number) to assert truth. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝) or True(⌜m⌝). <strong>TE m</strong>: from True(⌜φ⌝) or True(⌜n⌝) on line m, derive the named formula. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
       </div>
     </div>
 
@@ -932,11 +932,6 @@ header span {
               <td>TI (line no.)</td>
               <td><code>TI n</code></td>
               <td class="fol-note-cell">Line 3: <code>P ∨ Q</code><br>Line 6: <code>True(⌜3⌝)</code> &mdash; <code>TI 3</code><br><span style="font-size:.75rem">The numeral inside ⌜⌝ must match the cited line number.</span></td>
-            </tr>
-            <tr>
-              <td>TI (self-ref)</td>
-              <td><code>TI</code></td>
-              <td class="fol-note-cell">Line 5: <code>True(⌜5⌝)</code> &mdash; <code>TI</code><br><span style="font-size:.75rem">Truth-teller: no citation needed when the numeral equals the current line.</span></td>
             </tr>
             <tr>
               <td>TE (formula)</td>
@@ -3830,7 +3825,7 @@ function buildCertifyRow(idx, colSpan) {
       openCertifyIdx = null;
       render();
     } else {
-      resultSpan.textContent = '✗ Formula is TRUE here — try a different interpretation.';
+      resultSpan.textContent = '✗ Your interpretation is not false — try a different one.';
       resultSpan.className = 'certify-result err';
     }
   });
