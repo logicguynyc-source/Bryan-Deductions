@@ -1918,14 +1918,15 @@ function checkLine(proof, idx) {
   const L = (n) => getFormulaAt(proof, n);
   const P = (n) => n >= 0 && n < proof.length ? parse(normalizeFormula(proof[n].formula)) : null;
 
-  // Check line reference accessibility
   // Check line reference accessibility.
   // True(⌜n⌝) via TI is warranted only if the formula on line n is currently established —
   // i.e. accessible at the point of citation. Naming a discharged assumption does NOT make
   // it true. So TI-lineref is subject to exactly the same scope rules as every other rule.
+  // Exception: TI handles its own self/forward-reference errors with more precise messages.
+  const _isTI = j.rule === 'TI' || j.rule === 'TRUE-I';
   for (const li of lines) {
     if (li < 0 || li >= proof.length) return { ok: false, msg: `Line ${li+1} does not exist` };
-    if (li >= idx) return { ok: false, msg: `Line ${li+1} cannot be referenced from line ${idx+1} (no self or forward references)` };
+    if (!_isTI && li >= idx) return { ok: false, msg: `Line ${li+1} cannot be cited in the justification for line ${idx+1} — justifications may only cite earlier, accessible lines` };
     // Check it's accessible: a cited line is inaccessible once its enclosing subproof
     // is closed. A subproof is closed when any line between the cited line and the current
     // line has a depth strictly less than the cited line's depth. This handles both the
