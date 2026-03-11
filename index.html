@@ -1591,34 +1591,41 @@ function satEval(node, model) {
 //   evalChain    — [{lineNum, node}] in dependency order (deps before dependents)
 //   hasCycle     — true if a circular lineref was detected (ungrounded)
 //   isTautology  — true if the original formula is necessarily true given ground atoms
+//   cycleRefs    — Set of linerefs that are part of a cycle (need T/F assignment boxes)
 function buildGroundCertData(formulaNode, proof) {
   const groundAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
   const evalChain = [];
   const inProgress = new Set();
   const done = new Set();
-  const visited = new Set(); // every lineref encountered during chasing
+  const cyclic = new Set(); // linerefs confirmed to be part of a cycle
   let hasCycle = false;
 
+  // Returns true if lineNum is (or transitively depends on) a cyclic lineref.
   function chaseLineref(lineNum) {
-    visited.add(lineNum);
-    if (done.has(lineNum)) return;
-    if (inProgress.has(lineNum)) { hasCycle = true; return; }
+    if (done.has(lineNum))   return cyclic.has(lineNum);
+    if (inProgress.has(lineNum)) { hasCycle = true; cyclic.add(lineNum); return true; }
     inProgress.add(lineNum);
     const proofIdx = lineNum - 1; // lineNum is 1-indexed; proof array is 0-indexed
+    let isCyclic = false;
     if (proofIdx >= 0 && proofIdx < proof.length && proof[proofIdx] && proof[proofIdx].formula) {
       const lineNode = parse(proof[proofIdx].formula);
       if (lineNode) {
         const lineAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
         satCollectAtoms(lineNode, lineAtoms);
-        for (const dep of lineAtoms.linerefs) chaseLineref(dep);
-        for (const p of lineAtoms.props) groundAtoms.props.add(p);
-        lineAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
-        for (const v of lineAtoms.freeVars) groundAtoms.freeVars.add(v);
+        for (const dep of lineAtoms.linerefs) { if (chaseLineref(dep)) isCyclic = true; }
+        if (isCyclic) {
+          cyclic.add(lineNum);
+        } else {
+          for (const p of lineAtoms.props) groundAtoms.props.add(p);
+          lineAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
+          for (const v of lineAtoms.freeVars) groundAtoms.freeVars.add(v);
+          evalChain.push({ lineNum, node: lineNode });
+        }
         done.add(lineNum);
-        evalChain.push({ lineNum, node: lineNode });
       }
     }
     inProgress.delete(lineNum);
+    return isCyclic;
   }
 
   // Collect atoms directly on the formula itself (e.g. True(⌜φ⌝) with a quoted formula)
@@ -1653,11 +1660,7 @@ function buildGroundCertData(formulaNode, proof) {
     }
   }
 
-  // cycleRefs = linerefs that were visited but never resolved (part of a cycle)
-  const cycleRefs = new Set();
-  for (const ref of visited) { if (!done.has(ref)) cycleRefs.add(ref); }
-
-  return { groundAtoms, evalChain, hasCycle, isTautology, cycleRefs };
+  return { groundAtoms, evalChain, hasCycle, isTautology, cycleRefs: cyclic };
 }
 
 // Enumerate all 2^n propositional+lineref assignments and check tautology/sat/contradiction.
