@@ -1080,7 +1080,7 @@ const RULES = [
   { key: '∧I',  name: 'Conjunction Intro',      abbr: '∧I',  form: 'φ (m), ψ (n) → φ∧ψ',                     desc: 'From φ on line m and ψ on line n, derive φ ∧ ψ.',                           lines: 2 },
   { key: '∧E',  name: 'Conjunction Elim',       abbr: '∧E',  form: 'φ∧ψ (m) → φ or ψ',                       desc: 'From φ ∧ ψ on line m, derive either φ or ψ.',                              lines: 1 },
   { key: '∨I',  name: 'Disjunction Intro',      abbr: '∨I',  form: 'φ (m) → φ∨ψ or ψ∨φ',                     desc: 'From φ on line m, derive φ ∨ ψ (for any ψ).',                             lines: 1 },
-  { key: '∨E',  name: 'Disjunction Elim',       abbr: '∨E',  form: 'φ∨ψ (m), [φ⊢χ] (i–j), [ψ⊢χ] (k–l) → χ', desc: 'From φ∨ψ and two subproofs each deriving χ, derive χ.',                    lines: 3 },
+  { key: '∨E',  name: 'Disjunction Elim',       abbr: '∨E',  form: 'φ∨ψ (m), [φ⊢χ] (i–j), [ψ⊢χ] (k–l) → χ<br><span style="font-weight:normal;color:#555">or: φ∨ψ (m), φ→χ (n), ψ→χ (p) → χ</span>', desc: 'From φ∨ψ and two subproofs each deriving χ, derive χ. Alternatively, cite φ∨ψ and two conditionals φ→χ and ψ→χ.',                    lines: 3 },
   { key: '→I',  name: 'Conditional Intro',      abbr: '→I',  form: '[φ⊢ψ] (m–n) → φ→ψ',                      desc: 'From a subproof assuming φ (line m) and deriving ψ (line n), derive φ→ψ.', lines: 2 },
   { key: '→E',  name: 'Conditional Elim',       abbr: '→E',  form: 'φ→ψ (m), φ (n) → ψ',                     desc: 'Modus Ponens. From φ→ψ and φ, derive ψ.',                                  lines: 2 },
   { key: '↔I',  name: 'Biconditional Intro',    abbr: '↔I',  form: 'φ→ψ (m), ψ→φ (n) → φ↔ψ',                 desc: 'From φ→ψ and ψ→φ, derive φ↔ψ.',                                           lines: 2 },
@@ -1889,14 +1889,23 @@ function checkLine(proof, idx) {
     }
 
     case '∨E': case 'OE': case 'VE': {
-      if (lines.length < 3) return { ok: false, msg: '∨E needs 3 line references: disjunction, end of sub1, end of sub2' };
+      if (lines.length < 3) return { ok: false, msg: '∨E needs 3 line references: disjunction, end of sub1, end of sub2 (or φ→χ and ψ→χ)' };
       const disj = P(lines[0]);
       if (disj?.type !== '∨') return { ok: false, msg: `Line ${lines[0]+1} is not a disjunction` };
-      // lines[1] = last line of subproof 1, lines[2] = last line of subproof 2
+      // Mode B: conditional form — lines[1] is φ→χ, lines[2] is ψ→χ (or vice versa)
+      const l1 = P(lines[1]), l2 = P(lines[2]);
+      if (l1?.type === '→' && l2?.type === '→') {
+        const forwardMatch = formulasEqual(l1.left, disj.left)  && formulasEqual(l1.right, f)
+                          && formulasEqual(l2.left, disj.right) && formulasEqual(l2.right, f);
+        const reverseMatch = formulasEqual(l1.left, disj.right) && formulasEqual(l1.right, f)
+                          && formulasEqual(l2.left, disj.left)  && formulasEqual(l2.right, f);
+        if (forwardMatch || reverseMatch) return { ok: true };
+      }
+      // Mode A: subproof form — lines[1]/lines[2] are last lines of subproofs concluding f
       const c1 = normalizeFormula(L(lines[1]) || '');
       const c2 = normalizeFormula(L(lines[2]) || '');
-      if (!formulasEqual(c1, f)) return { ok: false, msg: `First subproof concludes ${c1}, not ${f}` };
-      if (!formulasEqual(c2, f)) return { ok: false, msg: `Second subproof concludes ${c2}, not ${f}` };
+      if (!formulasEqual(c1, f)) return { ok: false, msg: `Line ${lines[1]+1} does not conclude ${f} (cite the last line of each subproof, or two conditionals φ→χ and ψ→χ)` };
+      if (!formulasEqual(c2, f)) return { ok: false, msg: `Line ${lines[2]+1} does not conclude ${f} (cite the last line of each subproof, or two conditionals φ→χ and ψ→χ)` };
       return { ok: true };
     }
 
