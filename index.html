@@ -1045,6 +1045,9 @@ function normalizeFormula(s) {
     // Final robust sweep: v between any formula-ending token and any formula-starting token
     .replace(/([\)\w⊥∀∃¬])\s*v\s*(?=[¬∀∃(⊥])/g, '$1 ∨ ')
     .replace(/([\)\w⊥∀∃¬])\s*v\s*(?=[A-Z])/g, '$1 ∨ ')
+    // v between two single lowercase sentential variables (e.g. pvq → p∨q)
+    // Word boundaries ensure this doesn't fire inside predicate applications (e.g. Ravq is safe)
+    .replace(/\b([a-z])\s*v\s*([a-z])\b/g, '$1 ∨ $2')
     .trim();
 }
 
