@@ -1596,9 +1596,11 @@ function buildGroundCertData(formulaNode, proof) {
   const evalChain = [];
   const inProgress = new Set();
   const done = new Set();
+  const visited = new Set(); // every lineref encountered during chasing
   let hasCycle = false;
 
   function chaseLineref(lineNum) {
+    visited.add(lineNum);
     if (done.has(lineNum)) return;
     if (inProgress.has(lineNum)) { hasCycle = true; return; }
     inProgress.add(lineNum);
@@ -1651,7 +1653,11 @@ function buildGroundCertData(formulaNode, proof) {
     }
   }
 
-  return { groundAtoms, evalChain, hasCycle, isTautology };
+  // cycleRefs = linerefs that were visited but never resolved (part of a cycle)
+  const cycleRefs = new Set();
+  for (const ref of visited) { if (!done.has(ref)) cycleRefs.add(ref); }
+
+  return { groundAtoms, evalChain, hasCycle, isTautology, cycleRefs };
 }
 
 // Enumerate all 2^n propositional+lineref assignments and check tautology/sat/contradiction.
@@ -3760,17 +3766,21 @@ function triggerAssumptionCertification(idx) {
   let certEvalChain = null;
   let certHasCycle = false;
   let certIsTautology = false;
+  let certCycleRefs = new Set();
   if (atoms.linerefs.size > 0) {
     const gcd = buildGroundCertData(node, proof);
     certAtoms = gcd.groundAtoms;
     certEvalChain = gcd.evalChain;
     certHasCycle = gcd.hasCycle;
     certIsTautology = gcd.isTautology;
+    certCycleRefs = gcd.cycleRefs;
   }
 
   const isFOL = certAtoms.predicates.size > 0 || containsQuantifier(node) || certAtoms.freeVars.size > 0;
+  // hasNoVars is only true if there are genuinely no variables AND no unresolved cyclic linerefs
   const hasNoVars = certAtoms.props.size === 0 && certAtoms.predicates.size === 0 &&
-                    certAtoms.freeVars.size === 0 && certAtoms.linerefs.size === 0;
+                    certAtoms.freeVars.size === 0 && certAtoms.linerefs.size === 0
+                    && certCycleRefs.size === 0;
 
   proof[idx].falsifiabilityVerified = false;
   proof[idx].falsifiabilityError =
@@ -3781,6 +3791,7 @@ function triggerAssumptionCertification(idx) {
   proof[idx]._certEvalChain = certEvalChain;
   proof[idx]._certHasCycle = certHasCycle;
   proof[idx]._certIsTautology = certIsTautology;
+  proof[idx]._certCycleRefs = certCycleRefs;
   openCertifyIdx = idx;
   render();
 }
@@ -3791,6 +3802,7 @@ function buildCertifyRow(idx, colSpan) {
   const node = parse(row.formula);
   const atoms = row._certAtoms || { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
   const isFOL = row._certIsFOL || false;
+  const cycleRefs = row._certCycleRefs || new Set();
   const formula = row.formula;  // show exactly what the student typed
 
   const tr = document.createElement('tr');
@@ -3837,6 +3849,22 @@ function buildCertifyRow(idx, colSpan) {
     wrap.appendChild(lbl); wrap.appendChild(inp);
     fieldsDiv.appendChild(wrap);
   }
+
+  // Cyclic lineref fields: T/F dropdowns for ungrounded self-referential linerefs
+  const cycleRefList = [...cycleRefs].sort((a, b) => a - b);
+  cycleRefList.forEach(lineNum => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
+    const lbl = document.createElement('label');
+    lbl.style.fontFamily = 'var(--mono)';
+    lbl.textContent = 'Line ' + lineNum + ':';
+    const sel = document.createElement('select');
+    sel.id = 'certify-lineref-' + idx + '-' + lineNum;
+    sel.style.cssText = 'font-size:.85rem;padding:2px 4px';
+    ['T','F'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    wrap.appendChild(lbl); wrap.appendChild(sel);
+    fieldsDiv.appendChild(wrap);
+  });
 
   const propList = [...atoms.props].sort();
   propList.forEach(name => {
@@ -3927,12 +3955,37 @@ function buildCertifyRow(idx, colSpan) {
     });
 
     if (!node) { resultSpan.textContent = 'Invalid formula.'; resultSpan.className = 'certify-result err'; return; }
-    // Resolve lineref chain (True(⌜n⌝) → ground formula values) before evaluating
+
+    // Populate cyclic linerefs from user's T/F assignments
+    cycleRefList.forEach(lineNum => {
+      const sel = document.getElementById('certify-lineref-' + idx + '-' + lineNum);
+      model.linerefs[lineNum] = sel ? sel.value === 'T' : false;
+    });
+
+    // Resolve grounded lineref chain
     if (row._certEvalChain) {
       for (const { lineNum, node: lineNode } of row._certEvalChain) {
         model.linerefs[lineNum] = satEval(lineNode, model);
       }
     }
+
+    // Consistency check for cyclic linerefs: the formula on that line must evaluate
+    // to the same truth value the user assigned to it.
+    for (const lineNum of cycleRefList) {
+      const proofIdx = lineNum - 1;
+      if (proofIdx >= 0 && proofIdx < proof.length && proof[proofIdx] && proof[proofIdx].formula) {
+        const lineNode = parse(proof[proofIdx].formula);
+        if (lineNode) {
+          const lineVal = satEval(lineNode, model);
+          if (lineVal !== model.linerefs[lineNum]) {
+            resultSpan.textContent = '✗ Inconsistent: assigning line ' + lineNum + ' = ' + (model.linerefs[lineNum] ? 'T' : 'F') + ' leads to a contradiction.';
+            resultSpan.className = 'certify-result err';
+            return;
+          }
+        }
+      }
+    }
+
     const val = satEval(node, model);
     if (val === null) { resultSpan.textContent = 'Could not evaluate — check inputs.'; resultSpan.className = 'certify-result err'; return; }
     if (val === false) {
