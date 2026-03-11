@@ -2359,12 +2359,20 @@ function render() {
       scheduleSnapshot();
     });
     formInput.addEventListener('blur', e => {
-      proof[idx].formula = preprocessInput(e.target.value);
+      const newVal = preprocessInput(e.target.value);
+      const changed = newVal !== proof[idx].formula;
+      proof[idx].formula = newVal;
       formInput.value = proof[idx].formula;
-      if (proof[idx].type === 'assumption' && proof[idx].formula) triggerAssumptionCertification(idx);
+      if (proof[idx].type === 'assumption' && proof[idx].formula) {
+        // Only re-trigger certification if the formula actually changed, or if it
+        // has never been evaluated yet (null = untouched).
+        if (changed || proof[idx].falsifiabilityVerified === null) {
+          triggerAssumptionCertification(idx);
+        }
+      }
     });
     formTd.appendChild(formInput);
-
+ 
     // Justification
     const justTd = document.createElement('td');
     justTd.className = 'td-just';
