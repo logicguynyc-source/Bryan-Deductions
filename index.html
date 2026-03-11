@@ -673,7 +673,13 @@ header span {
   <span>Bryan-Style Proof Editor</span>
 </header>
 <div class="intro-blurb">
-  Bryan Deduction is a Fitch-style natural deduction system extended with a truth predicate and self-referential syntax. Unlike standard systems, you can write <code>True(⌜φ⌝)</code> and even refer to proof lines by number. The key innovation: assumptions must be <em>falsifiable</em>. This single constraint, combined with restrictions on forward references and self-referential truth introductions, ensures that no liar sentence, Curry sentence, or similar self-referential trick can be used to derive a contradiction from the rules alone.
+  Bryan Deduction is a Fitch-style natural deduction system extended with a truth predicate. It uses a quotational syntax with no restrictions on formula content. Key differences from standard systems:
+  <ul>
+    <li>From any accessible formula φ, you can derive <code>True(⌜φ⌝)</code>. And from any accessible <code>True(⌜φ⌝)</code>, you can derive φ.</li>
+    <li>From any accessible line n, you can derive <code>True(⌜n⌝)</code>. And from any accessible line that states <code>True(⌜n⌝)</code>, you can derive the formula on line n.</li>
+    <li>Subderivations can explore what follows from assuming <code>True(⌜n⌝)</code> or <code>¬True(⌜n⌝)</code> for proof lines n — including self-referential or forward-referential ones — as long as the assumption is falsifiable.</li>
+  </ul>
+  The key innovation: assumptions must be <em>falsifiable</em>. This constraint is designed to prevent liar sentences, Curry sentences, and similar self-referential tricks from being used to derive a contradiction from the inference rules alone.
 </div>
 
 <!-- SYMBOL BAR -->
@@ -1572,6 +1578,76 @@ function satEval(node, model) {
     }
   }
   return null;
+}
+
+// Chase True(⌜n⌝) lineref chains to ground propositional/FOL atoms.
+// Used by the certification strip so that e.g. assuming True(⌜n⌝) when line n is "p∨q"
+// shows p and q as the variables to assign, not a lineref.
+// Returns:
+//   groundAtoms  — { props, predicates, freeVars, linerefs } of the resolved ground formulas
+//   evalChain    — [{lineNum, node}] in dependency order (deps before dependents)
+//   hasCycle     — true if a circular lineref was detected (ungrounded)
+//   isTautology  — true if the original formula is necessarily true given ground atoms
+function buildGroundCertData(formulaNode, proof) {
+  const groundAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+  const evalChain = [];
+  const inProgress = new Set();
+  const done = new Set();
+  let hasCycle = false;
+
+  function chaseLineref(lineNum) {
+    if (done.has(lineNum)) return;
+    if (inProgress.has(lineNum)) { hasCycle = true; return; }
+    inProgress.add(lineNum);
+    if (lineNum >= 0 && lineNum < proof.length && proof[lineNum] && proof[lineNum].formula) {
+      const lineNode = parse(proof[lineNum].formula);
+      if (lineNode) {
+        const lineAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+        satCollectAtoms(lineNode, lineAtoms);
+        for (const dep of lineAtoms.linerefs) chaseLineref(dep);
+        for (const p of lineAtoms.props) groundAtoms.props.add(p);
+        lineAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
+        for (const v of lineAtoms.freeVars) groundAtoms.freeVars.add(v);
+        done.add(lineNum);
+        evalChain.push({ lineNum, node: lineNode });
+      }
+    }
+    inProgress.delete(lineNum);
+  }
+
+  // Collect atoms directly on the formula itself (e.g. True(⌜φ⌝) with a quoted formula)
+  const topAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+  satCollectAtoms(formulaNode, topAtoms);
+  for (const p of topAtoms.props) groundAtoms.props.add(p);
+  topAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
+  for (const v of topAtoms.freeVars) groundAtoms.freeVars.add(v);
+  for (const lineNum of topAtoms.linerefs) chaseLineref(lineNum);
+
+  // Tautology check (propositional only, no FOL)
+  let isTautology = false;
+  if (!hasCycle && groundAtoms.predicates.size === 0 && groundAtoms.freeVars.size === 0) {
+    const propKeys = [...groundAtoms.props];
+    const n = propKeys.length;
+    function evalWithChain(propMask) {
+      const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+      propKeys.forEach((k, i) => { model.props[k] = !!(propMask >> i & 1); });
+      for (const { lineNum, node: lineNode } of evalChain) {
+        model.linerefs[lineNum] = satEval(lineNode, model);
+      }
+      return satEval(formulaNode, model);
+    }
+    if (n === 0) {
+      // No variables at all — evaluate directly
+      isTautology = evalWithChain(0) === true;
+    } else {
+      isTautology = true;
+      for (let mask = 0; mask < (1 << n); mask++) {
+        if (!evalWithChain(mask)) { isTautology = false; break; }
+      }
+    }
+  }
+
+  return { groundAtoms, evalChain, hasCycle, isTautology };
 }
 
 // Enumerate all 2^n propositional+lineref assignments and check tautology/sat/contradiction.
@@ -3672,21 +3748,34 @@ function triggerAssumptionCertification(idx) {
   }
   const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
   satCollectAtoms(node, atoms);
-  const isFOL = atoms.predicates.size > 0 || containsQuantifier(node) || atoms.freeVars.size > 0;
 
-  // Check whether there are any assignable atoms at all
-  const hasNoVars = atoms.props.size === 0 && atoms.predicates.size === 0 &&
-                    atoms.freeVars.size === 0 && atoms.linerefs.size === 0;
+  // If the formula contains linerefs (True(⌜n⌝) forms), chase them to ground atoms
+  // so the certification strip shows the ground propositional variables instead.
+  let certAtoms = atoms;
+  let certEvalChain = null;
+  let certHasCycle = false;
+  let certIsTautology = false;
+  if (atoms.linerefs.size > 0) {
+    const gcd = buildGroundCertData(node, proof);
+    certAtoms = gcd.groundAtoms;
+    certEvalChain = gcd.evalChain;
+    certHasCycle = gcd.hasCycle;
+    certIsTautology = gcd.isTautology;
+  }
 
-  // Open the inline certification strip for all well-formed assumptions.
-  // Tautologies will always fail at Verify time; formulas with no variables
-  // show a special 'no open variables' message.
+  const isFOL = certAtoms.predicates.size > 0 || containsQuantifier(node) || certAtoms.freeVars.size > 0;
+  const hasNoVars = certAtoms.props.size === 0 && certAtoms.predicates.size === 0 &&
+                    certAtoms.freeVars.size === 0 && certAtoms.linerefs.size === 0;
+
   proof[idx].falsifiabilityVerified = false;
   proof[idx].falsifiabilityError =
     'Hold up! In the Bryan Deduction system, you can only assume falsifiable statements — use the 🔒 button to certify this assumption.';
-  proof[idx]._certAtoms = atoms;
+  proof[idx]._certAtoms = certAtoms;
   proof[idx]._certIsFOL = isFOL;
   proof[idx]._certNoVars = hasNoVars;
+  proof[idx]._certEvalChain = certEvalChain;
+  proof[idx]._certHasCycle = certHasCycle;
+  proof[idx]._certIsTautology = certIsTautology;
   openCertifyIdx = idx;
   render();
 }
@@ -3710,6 +3799,14 @@ function buildCertifyRow(idx, colSpan) {
   hdr.innerHTML = 'To use <span class="certify-formula">' + escapeHtml(formula) +
     '</span> as an assumption in the Bryan Deduction system, you must provide an interpretation under which it is <strong>FALSE</strong>:';
   td.appendChild(hdr);
+
+  // Amber tautology warning: the assumption can never be made false
+  if (row._certIsTautology) {
+    const warn = document.createElement('div');
+    warn.style.cssText = 'color:#92610a;background:#fff8e1;border:1px solid #f0c040;border-radius:4px;font-size:.82rem;padding:5px 8px;margin-top:6px';
+    warn.textContent = '⚠ The referenced formula is a tautology — no assignment can make this assumption false.';
+    td.appendChild(warn);
+  }
 
   // If there are no assignable variables, show a note and return early
   if (row._certNoVars) {
@@ -3825,6 +3922,12 @@ function buildCertifyRow(idx, colSpan) {
     });
 
     if (!node) { resultSpan.textContent = 'Invalid formula.'; resultSpan.className = 'certify-result err'; return; }
+    // Resolve lineref chain (True(⌜n⌝) → ground formula values) before evaluating
+    if (row._certEvalChain) {
+      for (const { lineNum, node: lineNode } of row._certEvalChain) {
+        model.linerefs[lineNum] = satEval(lineNode, model);
+      }
+    }
     const val = satEval(node, model);
     if (val === null) { resultSpan.textContent = 'Could not evaluate — check inputs.'; resultSpan.className = 'certify-result err'; return; }
     if (val === false) {
