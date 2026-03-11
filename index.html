@@ -715,6 +715,10 @@ header span {
             <button class="btn btn-primary" id="createProofBtn">Create Proof</button>
             <button class="btn btn-ghost" id="clearProofBtn" style="display:none">Clear &amp; Reset</button>
           </div>
+          <div id="derivabilityWarning" style="display:none;margin-top:8px;padding:8px 12px;background:#fff8e6;border:1px solid #e6b800;border-radius:4px;font-size:.85rem;color:#7a4f00;">
+            <strong>Warning:</strong> this conclusion is not derivable from these premises.
+            <button onclick="document.getElementById('derivabilityWarning').style.display='none'" style="margin-left:10px;font-size:.78rem;padding:1px 7px;cursor:pointer;">Dismiss</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2551,6 +2555,15 @@ document.getElementById('createProofBtn').addEventListener('click', () => {
   const premises = premStr.split(/[,;]/).map(s => preprocessInput(s)).filter(Boolean);
   conclusionFormula = preprocessInput(concStr);
 
+  // Check propositional derivability and warn if a counterexample exists
+  const warn = document.getElementById('derivabilityWarning');
+  const entail = checkPropositionalEntailment(premises, conclusionFormula);
+  if (entail.supported && !entail.valid) {
+    warn.style.display = '';
+  } else {
+    warn.style.display = 'none';
+  }
+
   proof = [];
   undoStack = [];
   redoStack = [];
@@ -3649,28 +3662,19 @@ function triggerAssumptionCertification(idx) {
   satCollectAtoms(node, atoms);
   const isFOL = atoms.predicates.size > 0 || containsQuantifier(node) || atoms.freeVars.size > 0;
 
-  // Auto-check propositional tautology
-  if (!isFOL) {
-    const allKeys = [...atoms.props, ...atoms.linerefs];
-    if (allKeys.length <= 14) {
-      const negNode = { type: 'neg', sub: node };
-      if (satSearchPropositional(negNode, allKeys) === 'contradiction') {
-        proof[idx].falsifiabilityVerified = false;
-        proof[idx].falsifiabilityError =
-          'Hold up! "' + unparse(node) + '" is a tautology — in the Bryan Deduction system, you can only assume falsifiable statements.';
-        openCertifyIdx = null;
-        render();
-        return;
-      }
-    }
-  }
+  // Check whether there are any assignable atoms at all
+  const hasNoVars = atoms.props.size === 0 && atoms.predicates.size === 0 &&
+                    atoms.freeVars.size === 0 && atoms.linerefs.size === 0;
 
-  // WFF and not a tautology — mark needing certification; open inline strip
+  // Open the inline certification strip for all well-formed assumptions.
+  // Tautologies will always fail at Verify time; formulas with no variables
+  // show a special 'no open variables' message.
   proof[idx].falsifiabilityVerified = false;
   proof[idx].falsifiabilityError =
     'Hold up! In the Bryan Deduction system, you can only assume falsifiable statements — use the 🔒 button to certify this assumption.';
   proof[idx]._certAtoms = atoms;
   proof[idx]._certIsFOL = isFOL;
+  proof[idx]._certNoVars = hasNoVars;
   openCertifyIdx = idx;
   render();
 }
@@ -3694,6 +3698,16 @@ function buildCertifyRow(idx, colSpan) {
   hdr.innerHTML = 'To use <span class="certify-formula">' + escapeHtml(formula) +
     '</span> as an assumption in the Bryan Deduction system, you must provide an interpretation under which it is <strong>FALSE</strong>:';
   td.appendChild(hdr);
+
+  // If there are no assignable variables, show a note and return early
+  if (row._certNoVars) {
+    const noVarMsg = document.createElement('div');
+    noVarMsg.style.cssText = 'color:var(--red);font-size:.85rem;font-family:var(--mono);margin-top:8px;font-style:italic';
+    noVarMsg.textContent = 'No open variables to assign';
+    td.appendChild(noVarMsg);
+    tr.appendChild(td);
+    return tr;
+  }
 
   // Fields
   const fieldsDiv = document.createElement('div');
