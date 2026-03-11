@@ -2314,11 +2314,11 @@ function checkLine(proof, idx) {
         const n    = tiArg.lineNum;   // 1-indexed line number the user typed
         const nIdx = n - 1;           // 0-indexed
 
-        // Self-referential truth claims are not permitted.
-        if (nIdx === idx) return { ok: false, msg: `TI: True(⌜${n}⌝) on line ${n} — self-referential truth claims are not permitted. Use True(⌜φ⌝) with an explicit citation instead.` };
+        // Self-reference: line n is the very line being derived — not yet established.
+        if (nIdx === idx) return { ok: false, msg: `TI: nothing established so far guarantees that line ${n} is true — you cannot derive True(⌜${n}⌝) on line ${n} by citing line ${n} itself.` };
 
-        // Forward reference
-        if (nIdx > idx) return { ok: false, msg: `TI: ⌜${n}⌝ refers to future line ${n}` };
+        // Forward reference: line n hasn't been derived yet.
+        if (nIdx > idx) return { ok: false, msg: `TI: nothing established so far guarantees that line ${n} is true — line ${n} has not yet been derived.` };
 
         // Backward reference: the cited justification line must equal n
         if (lines.length < 1) return { ok: false, msg: `TI: write "TI ${n}" to assert line ${n} is true` };
