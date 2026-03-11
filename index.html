@@ -1602,8 +1602,9 @@ function buildGroundCertData(formulaNode, proof) {
     if (done.has(lineNum)) return;
     if (inProgress.has(lineNum)) { hasCycle = true; return; }
     inProgress.add(lineNum);
-    if (lineNum >= 0 && lineNum < proof.length && proof[lineNum] && proof[lineNum].formula) {
-      const lineNode = parse(proof[lineNum].formula);
+    const proofIdx = lineNum - 1; // lineNum is 1-indexed; proof array is 0-indexed
+    if (proofIdx >= 0 && proofIdx < proof.length && proof[proofIdx] && proof[proofIdx].formula) {
+      const lineNode = parse(proof[proofIdx].formula);
       if (lineNode) {
         const lineAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
         satCollectAtoms(lineNode, lineAtoms);
