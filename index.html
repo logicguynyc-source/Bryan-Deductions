@@ -679,7 +679,7 @@ header span {
     <li>From any accessible line n, you can derive <code>True(⌜n⌝)</code>. And from any accessible line that states <code>True(⌜n⌝)</code>, you can derive the formula on line n.</li>
     <li>Subderivations can explore what follows from assuming <code>True(⌜n⌝)</code> or <code>¬True(⌜n⌝)</code> for proof lines n — including self-referential or forward-referential ones — as long as the assumption is falsifiable.</li>
   </ul>
-  The key innovation: assumptions must be <em>falsifiable</em>. This constraint is designed to prevent liar sentences, Curry sentences, and similar self-referential tricks from being used to derive a contradiction from the inference rules alone.
+  The key innovation: assumptions must be <em>falsifiable</em> — meaning there must exist a coherent assignment of truth values under which the assumption is false. For ordinary formulas this just means the formula isn't a tautology. For self-referential formulas like <code>True(⌜n⌝)</code> on line n, it means the assignment of truth values to the relevant lines must be internally consistent (a line can't be deemed both true and false) and must make the assumption false. This constraint is designed to prevent liar sentences, Curry sentences, and similar self-referential tricks from being used to derive a contradiction from the inference rules alone.
 </div>
 
 <!-- SYMBOL BAR -->
@@ -2963,14 +2963,14 @@ function runDevSelfTests() {
         && formulasEqual(parse('¬((∀x Dx)∨(¬∀x Dx))')?.sub, parse('((∀x Dx)∨(¬∀x Dx))'))
     },
     {
-      name: 'No self/forward reference enforced',
+      name: 'Justification cannot cite current or future line',
       ok: (() => {
         const fakeProof = [
           { type: 'premise', formula: 'P', justification: 'Pr', depth: 0 },
           { type: 'step', formula: 'P', justification: 'R 2', depth: 0 }
         ];
         const r = checkLine(fakeProof, 1);
-        return r && r.ok === false && /no self or forward references/i.test(r.msg || '');
+        return r && r.ok === false && /cannot be cited in the justification/i.test(r.msg || '');
       })()
     }
   ];
@@ -3991,7 +3991,9 @@ function buildCertifyRow(idx, colSpan) {
         if (lineNode) {
           const lineVal = satEval(lineNode, model);
           if (lineVal !== model.linerefs[lineNum]) {
-            resultSpan.textContent = '✗ Inconsistent: assigning line ' + lineNum + ' = ' + (model.linerefs[lineNum] ? 'T' : 'F') + ' leads to a contradiction.';
+            const deemed = model.linerefs[lineNum] ? 'true' : 'false';
+            const implied = model.linerefs[lineNum] ? 'false' : 'true';
+            resultSpan.textContent = '✗ Inconsistent interpretation: deeming line ' + lineNum + ' ' + deemed + ' implies that you also deem line ' + lineNum + ' to be ' + implied + '.';
             resultSpan.className = 'certify-result err';
             return;
           }
