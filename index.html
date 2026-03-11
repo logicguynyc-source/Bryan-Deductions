@@ -747,7 +747,10 @@ header span {
     <div class="panel" id="proofPanel" style="display:none">
       <div class="panel-header">
         <span>Proof</span>
-        <button class="btn btn-ghost btn-sm" id="checkBtn" style="color:#fff;border-color:#555;">▶ Check Proof</button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="btn btn-ghost btn-sm" id="checkBtn" style="color:#fff;border-color:#555;">▶ Check Proof</button>
+          <button class="btn btn-ghost btn-sm" id="exportBtn" style="color:#fff;border-color:#555;">⬇ Export</button>
+        </div>
       </div>
       <div class="proof-wrap">
         <table class="fitch-table" id="fitchTable">
@@ -2869,6 +2872,36 @@ function scheduleSnapshot() {
 }
 
 document.getElementById('undoBtn').addEventListener('click', undo);
+
+function exportProofAsText() {
+  if (!proof.length) return;
+  const lines = [];
+  const premises = proof.filter(r => r.type === 'premise');
+  if (premises.length) {
+    lines.push('Premises: ' + premises.map(r => r.formula).join(', '));
+  }
+  if (conclusionFormula) lines.push('Conclusion: ' + conclusionFormula);
+  lines.push('');
+  proof.forEach((row, i) => {
+    const lineNum = String(i + 1).padStart(2, ' ');
+    const indent  = '  '.repeat(row.depth);
+    const formula = row.formula || '';
+    const just    = row.type === 'premise'    ? 'Pr'
+                  : row.type === 'assumption' ? 'As'
+                  : (row.justification || '');
+    lines.push(lineNum + '.  ' + indent + formula.padEnd(36 - row.depth * 2) + just);
+  });
+  const text = lines.join('\n') + '\n';
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'proof.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('exportBtn').addEventListener('click', exportProofAsText);
 document.getElementById('redoBtn').addEventListener('click', redo);
 
 document.addEventListener('keydown', e => {
@@ -3519,6 +3552,32 @@ function runDevSelfTests() {
         ];
         const r = checkLine(fakeProof, 5);
         return { ok: r.ok === false, details: r.ok ? 'checker incorrectly accepted True(⌜1⌝) citing a discharged assumption' : '' };
+      }
+    },
+
+    {
+      name: 'Truth #10 (regression): TE lineref where n is inside a closed subproof should succeed',
+      _inline: () => {
+        // Subproof A (lines 2-3, depth 1) derives P on line 3, then closes at line 4 (Q→P).
+        // Subproof B (line 5) assumes True(⌜3⌝) — line 3 is now inside closed subproof A.
+        // Before the TE accessibility check was removed, TE on True(⌜3⌝) would have been
+        // rejected with "Line 3 is inside a closed subproof".
+        // After removal, it should succeed because the TE premise (True(⌜3⌝) on line 5)
+        // is accessible and the formula-match check passes.
+        const fakeProof = [
+          { type: 'premise',    formula: 'P',          justification: 'Pr',    depth: 0 }, // idx 0 — line 1
+          { type: 'assumption', formula: 'Q',          justification: 'As',    depth: 1 }, // idx 1 — line 2, opens A
+          { type: 'step',       formula: 'P',          justification: 'R 1',   depth: 1 }, // idx 2 — line 3, inside A
+          { type: 'step',       formula: 'Q → P',      justification: '→I 2-3',depth: 0 }, // idx 3 — line 4, closes A
+          { type: 'assumption', formula: 'True(⌜3⌝)',  justification: 'As',    depth: 1,   // idx 4 — line 5, opens B
+            falsifiabilityVerified: true },                                                  //   True(⌜3⌝) references line 3 inside closed A
+          { type: 'step',       formula: 'P',          justification: 'TE 5',  depth: 1 }, // idx 5 — line 6
+        ];
+        const r = checkLine(fakeProof, 5);
+        return {
+          ok: r.ok === true,
+          details: r.ok ? '' : `TE lineref across closed subproof was incorrectly rejected: ${r.msg}`
+        };
       }
     },
 
