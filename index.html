@@ -1622,7 +1622,17 @@ function buildGroundCertData(formulaNode, proof) {
           evalChain.push({ lineNum, node: lineNode });
         }
         done.add(lineNum);
+      } else {
+        // Unparseable formula — treat as unresolved
+        isCyclic = true;
+        cyclic.add(lineNum);
+        done.add(lineNum);
       }
+    } else {
+      // Line doesn't exist yet (forward ref) — treat as unresolved, needs T/F assignment
+      isCyclic = true;
+      cyclic.add(lineNum);
+      done.add(lineNum);
     }
     inProgress.delete(lineNum);
     return isCyclic;
