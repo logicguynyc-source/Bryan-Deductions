@@ -862,7 +862,7 @@ header span {
             <ol style="margin:.4em 0 .6em 1.4em; padding:0">
               <li><code>⊥</code> &mdash; the falsum constant</li>
               <li>Any single uppercase letter (<code>A</code>–<code>Z</code>) standing alone &mdash; a propositional variable</li>
-              <li>Any single lowercase letter (<code>a</code>–<code>z</code>) standing alone &mdash; a sentential variable</li>
+              <li>Any single lowercase letter (<code>a</code>–<code>z</code>) standing alone &mdash; a propositional variable</li>
               <li>An uppercase letter followed by one or more lowercase term letters (e.g. <code>Fx</code>, <code>Gxy</code>) &mdash; a predicate application. (<code>Ax</code> and <code>Ex</code> are reserved for quantifier shorthands and are not WFFs.)</li>
               <li><code>t<sub>1</sub> = t<sub>2</sub></code> where t<sub>1</sub> and t<sub>2</sub> are lowercase term letters &mdash; an identity statement</li>
               <li><code>True(⌜n⌝)</code> where n is a positive integer &mdash; the truth predicate applied to a line-number reference. (The proof-time constraint that line n must contain a WFF is a semantic condition, not a grammatical one.)</li>
@@ -879,17 +879,6 @@ header span {
         </div>
 
         <div class="fol-section">
-          <div class="fol-section-title">Atomic sentences</div>
-          <table class="fol-table">
-            <tr><td class="fol-ex"><code>P</code></td><td>TFL sentence letter</td></tr>
-            <tr><td class="fol-ex"><code>Fa</code></td><td>Predicate F, term a</td></tr>
-            <tr><td class="fol-ex"><code>Gab</code></td><td>Relation G, terms a, b</td></tr>
-            <tr><td class="fol-ex"><code>a=b</code></td><td>Identity</td></tr>
-          </table>
-          <div class="fol-note">Propositional variables: any single uppercase letter, or any single lowercase letter standing alone (e.g. <code>P</code>, <code>p</code>, <code>q</code>).<br>Predicates: single uppercase letter followed by one or more term letters (e.g. <code>Fx</code>, <code>Gxy</code>). Note: <code>Ax</code> and <code>Ex</code> are reserved as shorthands for <code>∀x</code> and <code>∃x</code> — use the Unicode symbols instead.<br>Terms / constants: single lowercase letter a–w.<br>Variables: single lowercase letter a–z (used inside quantifiers).</div>
-        </div>
-
-        <div class="fol-section">
           <div class="fol-section-title">Writing quantifiers</div>
           <table class="fol-table">
             <tr><th>You type</th><th>Means</th></tr>
@@ -900,7 +889,7 @@ header span {
             <tr><td class="fol-ex"><code>exists x Fx</code></td><td>Same (word form)</td></tr>
             <tr><td class="fol-ex"><code>some x Fx</code></td><td>Same (word form)</td></tr>
           </table>
-          <div class="fol-note">Use parentheses to delimit scope when needed: <code>∀x (Fx → Gx)</code>.<br>Without parens, the quantifier takes the rest of the line as its scope.<br><strong>Note:</strong> <code>Ax</code>/<code>Ex</code> shorthands are not supported — they are ambiguous with predicate applications like <code>Ea</code> (predicate E applied to a).</div>
+          <div class="fol-note">Use parentheses to delimit scope when needed: <code>∀x (Fx → Gx)</code>.<br>Without parens, the quantifier takes the rest of the line as its scope.<br><strong>Note:</strong> <code>Ax</code> and <code>Ex</code> are reserved as shorthands for <code>∀x</code> and <code>∃x</code> and cannot be used as predicate applications.</div>
         </div>
 
         <div class="fol-section">
