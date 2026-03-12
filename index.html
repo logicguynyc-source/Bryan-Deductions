@@ -2667,7 +2667,8 @@ document.getElementById('createProofBtn').addEventListener('click', () => {
   // Check propositional derivability and warn if a counterexample exists
   const warn = document.getElementById('derivabilityWarning');
   const entail = checkPropositionalEntailment(premises, conclusionFormula);
-  if (entail.supported && !entail.valid) {
+  const isNoPremisesBot = premises.length === 0 && conclusionFormula === '⊥';
+  if (entail.supported && !entail.valid && !isNoPremisesBot) {
     warn.style.display = '';
   } else {
     warn.style.display = 'none';
