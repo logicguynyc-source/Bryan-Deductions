@@ -1931,15 +1931,20 @@ function checkLine(proof, idx) {
   const row = proof[idx];
   const just = row.justification.trim();
 
-  // Ban forward linerefs in any formula, including premises and assumptions.
-  // A formula like True(⌜5⌝) on line 2 refers to a line that does not yet exist;
-  // we cannot know what it will say, so the reference is meaningless.
-  if (row.formula.trim()) {
+  // Ban forward linerefs in premises. A premise asserts a fact, so True(⌜5⌝)
+  // on line 2 is meaningless as a premise — line 5 doesn't exist yet.
+  // Assumptions are exempt: they are hypotheticals gated by the falsifiability
+  // constraint, and forward-referential assumptions are philosophically legitimate
+  // ("suppose whatever is on line n is true...").
+  // Derived steps are exempt: if a rule legitimately produces a formula containing
+  // a forward lineref (e.g. →I discharging a forward-referencing assumption),
+  // the result is valid. Individual rules (TI, TE) enforce their own ref checks.
+  if (row.type === 'premise' && row.formula.trim()) {
     const _fwdParsed = parse(normalizeFormula(row.formula));
     if (_fwdParsed) {
       const _fwdRefs = collectForwardLinerefs(_fwdParsed, idx);
       if (_fwdRefs.length > 0) {
-        return { ok: false, msg: `Formula references future line ${_fwdRefs[0]}, which has not been established yet` };
+        return { ok: false, msg: `Premise references future line ${_fwdRefs[0]}, which has not been established yet` };
       }
     }
   }
@@ -3714,18 +3719,20 @@ function runDevSelfTests() {
     },
 
     {
-      name: 'Negative #7: assumption with forward lineref must fail',
+      name: 'Negative #7: assumption with forward lineref is allowed (gated by falsifiability)',
       _inline: () => {
         // Line 1 (idx 0): assumption True(⌜3⌝) — references line 3, which doesn't exist yet.
-        // A subproof assumption cannot meaningfully claim something about a future line.
+        // Forward-referential assumptions are now permitted; the falsifiability constraint
+        // gates them instead. With falsifiabilityVerified not set to false, checkLine
+        // should accept this assumption.
         const fakeProof = [
           { type: 'assumption', formula: 'True(⌜3⌝)', justification: 'As', depth: 1 }, // idx 0
           { type: 'step',       formula: 'True(⌜3⌝)', justification: 'R 1', depth: 1 }, // idx 1
         ];
         const r = checkLine(fakeProof, 0);
         return {
-          ok: r.ok === false,
-          details: r.ok ? 'checker incorrectly accepted an assumption containing a forward lineref True(⌜3⌝) on line 1' : ''
+          ok: r.ok === true,
+          details: r.ok ? '' : `forward-referential assumption should be allowed but got: ${r.msg}`
         };
       }
     },
@@ -3746,17 +3753,17 @@ function runDevSelfTests() {
     },
 
     {
-      name: 'Negative #9: forward lineref inside complex formula must fail',
+      name: 'Negative #9: forward lineref inside complex premise must fail',
       _inline: () => {
-        // P ∧ True(⌜4⌝) on line 2 — the True(⌜4⌝) conjunct refers to line 4, beyond line 2.
+        // P ∧ True(⌜4⌝) as a premise on line 1 — the True(⌜4⌝) conjunct refers to line 4.
+        // Premises cannot contain forward linerefs (they are assertions, not hypotheticals).
         const fakeProof = [
-          { type: 'premise', formula: 'P',              justification: 'Pr',   depth: 0 }, // idx 0
-          { type: 'step',    formula: 'P ∧ True(⌜4⌝)', justification: '???',  depth: 0 }, // idx 1
+          { type: 'premise', formula: 'P ∧ True(⌜4⌝)', justification: 'Pr', depth: 0 }, // idx 0
         ];
-        const r = checkLine(fakeProof, 1);
+        const r = checkLine(fakeProof, 0);
         return {
           ok: r.ok === false,
-          details: r.ok ? 'checker incorrectly accepted P ∧ True(⌜4⌝) on line 2 (forward ref to line 4)' : ''
+          details: r.ok ? 'checker incorrectly accepted premise P ∧ True(⌜4⌝) (forward ref to line 4)' : ''
         };
       }
     },
@@ -3782,6 +3789,307 @@ function runDevSelfTests() {
   ];
 
   truthScriptedProofs.forEach(script => {
+    if (script._inline) {
+      const r = script._inline();
+      tests.push({ name: script.name, ok: r.ok, details: r.details });
+    } else {
+      const r = runScriptedProofTest(script);
+      tests.push({ name: script.name, ok: r.ok, details: r.details });
+    }
+  });
+
+  // ── Prior-derivation stress tests ──────────────────────────────────────
+  // These tests verify that the new "prior derivation" assumption path is
+  // sound — tautologies CAN be re-assumed once derived, but the rule does
+  // NOT open any route to ⊥ from no premises.
+
+  const priorDerivationTests = [
+
+    // ── Positive: proofs that were IMPOSSIBLE before the fix ──
+
+    {
+      name: 'Prior-derivation #1 (positive): (P∨¬P) ↔ (P∨¬P) from no premises',
+      premises: [],
+      conclusion: '(P∨¬P) ↔ (P∨¬P)',
+      lines: [
+        // Derive P∨¬P via IP
+        { type: 'assumption', depth: 1, formula: '¬(P∨¬P)' },          // 1
+        { type: 'assumption', depth: 2, formula: 'P' },                 // 2
+        { depth: 2, formula: 'P∨¬P',            justification: '∨I 2' },   // 3
+        { depth: 2, formula: '⊥',               justification: '⊥I 1,3' }, // 4
+        { depth: 1, formula: '¬P',               justification: '¬I 2-4' }, // 5
+        { depth: 1, formula: 'P∨¬P',            justification: '∨I 5' },   // 6
+        { depth: 1, formula: '⊥',               justification: '⊥I 1,6' }, // 7
+        { depth: 0, formula: 'P∨¬P',            justification: 'IP 1-7' }, // 8
+        // Re-assume P∨¬P (prior derivation from line 8)
+        { type: 'assumption', depth: 1, formula: 'P∨¬P' },             // 9
+        { depth: 1, formula: 'P∨¬P',            justification: 'R 8' },    // 10
+        { depth: 0, formula: '(P∨¬P) → (P∨¬P)', justification: '→I 9-10' }, // 11
+        { depth: 0, formula: '(P∨¬P) ↔ (P∨¬P)', justification: '↔I 11,11' } // 12
+      ]
+    },
+
+    {
+      name: 'Prior-derivation #2 (positive): (P∨¬P) → (Q∨¬Q) from no premises',
+      premises: [],
+      conclusion: '(P∨¬P) → (Q∨¬Q)',
+      lines: [
+        // Derive P∨¬P via IP
+        { type: 'assumption', depth: 1, formula: '¬(P∨¬P)' },
+        { type: 'assumption', depth: 2, formula: 'P' },
+        { depth: 2, formula: 'P∨¬P',            justification: '∨I 2' },
+        { depth: 2, formula: '⊥',               justification: '⊥I 1,3' },
+        { depth: 1, formula: '¬P',               justification: '¬I 2-4' },
+        { depth: 1, formula: 'P∨¬P',            justification: '∨I 5' },
+        { depth: 1, formula: '⊥',               justification: '⊥I 1,6' },
+        { depth: 0, formula: 'P∨¬P',            justification: 'IP 1-7' },   // 8
+        // Derive Q∨¬Q via IP
+        { type: 'assumption', depth: 1, formula: '¬(Q∨¬Q)' },               // 9
+        { type: 'assumption', depth: 2, formula: 'Q' },                      // 10
+        { depth: 2, formula: 'Q∨¬Q',            justification: '∨I 10' },
+        { depth: 2, formula: '⊥',               justification: '⊥I 9,11' },
+        { depth: 1, formula: '¬Q',               justification: '¬I 10-12' },
+        { depth: 1, formula: 'Q∨¬Q',            justification: '∨I 13' },
+        { depth: 1, formula: '⊥',               justification: '⊥I 9,14' },
+        { depth: 0, formula: 'Q∨¬Q',            justification: 'IP 9-15' },  // 16
+        // Assume P∨¬P (prior derivation from line 8), derive Q∨¬Q by reiteration
+        { type: 'assumption', depth: 1, formula: 'P∨¬P' },                  // 17
+        { depth: 1, formula: 'Q∨¬Q',            justification: 'R 16' },     // 18
+        { depth: 0, formula: '(P∨¬P) → (Q∨¬Q)', justification: '→I 17-18' } // 19
+      ]
+    },
+
+    // ── Positive inline: prior derivation bypasses falsification for tautologies ──
+
+    {
+      name: 'Prior-derivation #3 (positive): tautology assumption auto-certified by prior derivation',
+      _inline: () => {
+        // P∨¬P derived via IP on idx 7 (depth 0). The assumption on idx 8 has
+        // falsifiabilityVerified: false (would normally be blocked as a tautology),
+        // but prior derivation from idx 7 should override that.
+        const fakeProof = [
+          { type: 'assumption', formula: '¬(P∨¬P)', justification: 'As',     depth: 1 },
+          { type: 'assumption', formula: 'P',        justification: 'As',     depth: 2 },
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 2',   depth: 2 },
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,3', depth: 2 },
+          { type: 'step',       formula: '¬P',        justification: '¬I 2-4', depth: 1 },
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 5',   depth: 1 },
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,6', depth: 1 },
+          { type: 'step',       formula: 'P∨¬P',    justification: 'IP 1-7', depth: 0 },
+          // Tautology assumption with falsification explicitly FAILED — prior derivation must save it
+          { type: 'assumption', formula: 'P∨¬P',    justification: 'As',     depth: 1,
+            falsifiabilityVerified: false,
+            falsifiabilityError: 'tautology cannot be falsified' },
+        ];
+        const r = checkLine(fakeProof, 8);
+        return {
+          ok: r.ok === true,
+          details: r.ok ? '' : `prior derivation should auto-certify P∨¬P but got: ${r.msg}`
+        };
+      }
+    },
+
+    // ── Negative: attacks that try to derive ⊥ from no premises ──
+
+    {
+      name: 'Prior-derivation #4 (negative): formula in closed subproof does NOT enable prior derivation',
+      _inline: () => {
+        // Subproof A (depth 1) derives R∧R at idx 1. Closed at idx 2 (depth 0).
+        // Subproof B (depth 1) assumes R∧R with falsifiabilityVerified: false.
+        // Prior derivation must NOT fire (idx 1 is inside closed A).
+        const fakeProof = [
+          { type: 'assumption', formula: 'R',        justification: 'As',       depth: 1 },
+          { type: 'step',       formula: 'R∧R',     justification: '∧I 1,1',   depth: 1 },
+          { type: 'step',       formula: 'R→(R∧R)', justification: '→I 1-2',   depth: 0 },
+          { type: 'assumption', formula: 'R∧R',     justification: 'As',       depth: 1,
+            falsifiabilityVerified: false,
+            falsifiabilityError: 'test: blocked' },
+        ];
+        const r = checkLine(fakeProof, 3);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'prior derivation incorrectly auto-certified from closed subproof' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Prior-derivation #5 (negative, "The Smuggler"): cannot cite ¬(P∨¬P) from closed IP subproof',
+      _inline: () => {
+        // Derive P∨¬P via IP. Inside the IP subproof, ¬(P∨¬P) lived at depth 1.
+        // After closing IP, open a new subproof, assume P (for ∨E case 1),
+        // and try to cite the now-closed ¬(P∨¬P) via R to manufacture ⊥.
+        const fakeProof = [
+          { type: 'assumption', formula: '¬(P∨¬P)', justification: 'As',     depth: 1 }, // idx 0
+          { type: 'assumption', formula: 'P',        justification: 'As',     depth: 2 }, // idx 1
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 2',   depth: 2 }, // idx 2
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,3', depth: 2 }, // idx 3
+          { type: 'step',       formula: '¬P',        justification: '¬I 2-4', depth: 1 }, // idx 4
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 5',   depth: 1 }, // idx 5
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,6', depth: 1 }, // idx 6
+          { type: 'step',       formula: 'P∨¬P',    justification: 'IP 1-7', depth: 0 }, // idx 7
+          // Open subproof, assume P∨¬P (prior derivation — fine)
+          { type: 'assumption', formula: 'P∨¬P',    justification: 'As',     depth: 1 }, // idx 8
+          // ATTACK: reiterate ¬(P∨¬P) from the now-closed IP subproof
+          { type: 'step',       formula: '¬(P∨¬P)', justification: 'R 1',    depth: 1 }, // idx 9 — MUST FAIL
+          { type: 'step',       formula: '⊥',        justification: '⊥I 9,10', depth: 1 }, // idx 10
+          { type: 'step',       formula: '(P∨¬P)→⊥', justification: '→I 9-11', depth: 0 }, // idx 11
+          { type: 'step',       formula: '⊥',        justification: '→E 12,8', depth: 0 }, // idx 12
+        ];
+        const r = checkLine(fakeProof, 9);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'checker allowed reiteration of ¬(P∨¬P) from a closed subproof — ⊥ derivable!' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Prior-derivation #6 (negative, "The Scavenger"): cannot cite ¬P from closed IP interior',
+      _inline: () => {
+        // Same IP proof for P∨¬P. After closing, assume P in a new subproof.
+        // Try to cite ¬P (line 5 = idx 4, from closed IP interior) via ⊥I.
+        const fakeProof = [
+          { type: 'assumption', formula: '¬(P∨¬P)', justification: 'As',     depth: 1 }, // idx 0
+          { type: 'assumption', formula: 'P',        justification: 'As',     depth: 2 }, // idx 1
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 2',   depth: 2 }, // idx 2
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,3', depth: 2 }, // idx 3
+          { type: 'step',       formula: '¬P',        justification: '¬I 2-4', depth: 1 }, // idx 4
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 5',   depth: 1 }, // idx 5
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,6', depth: 1 }, // idx 6
+          { type: 'step',       formula: 'P∨¬P',    justification: 'IP 1-7', depth: 0 }, // idx 7
+          // New subproof: assume P
+          { type: 'assumption', formula: 'P',        justification: 'As',     depth: 1 }, // idx 8
+          // ATTACK: ⊥I citing P (line 9 = idx 8) and ¬P (line 5 = idx 4, closed)
+          { type: 'step',       formula: '⊥',        justification: '⊥I 9,5', depth: 1 }, // idx 9 — MUST FAIL
+        ];
+        const r = checkLine(fakeProof, 9);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'checker allowed ⊥I citing ¬P from inside a closed subproof — P→⊥ derivable!' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Prior-derivation #7 (negative, "The Conditional Explosion"): →E on P→P cannot conjure P',
+      _inline: () => {
+        // Derive P→P at depth 0. Assume P→P via prior derivation.
+        // Try →E citing P→P twice (as both conditional and antecedent) to get P.
+        // Must fail because P ≠ P→P.
+        const fakeProof = [
+          { type: 'assumption', formula: 'P',    justification: 'As',     depth: 1 }, // idx 0
+          { type: 'step',       formula: 'P',    justification: 'R 1',    depth: 1 }, // idx 1
+          { type: 'step',       formula: 'P→P',  justification: '→I 1-2', depth: 0 }, // idx 2
+          // Assume P→P (prior derivation from idx 2)
+          { type: 'assumption', formula: 'P→P',  justification: 'As',     depth: 1 }, // idx 3
+          // ATTACK: use →E on P→P twice to fabricate P from nothing
+          { type: 'step',       formula: 'P',    justification: '→E 4,4', depth: 1 }, // idx 4 — MUST FAIL
+        ];
+        const r = checkLine(fakeProof, 4);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'checker allowed →E to produce P from P→P alone — unsound!' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Prior-derivation #8 (negative, "The Liar Bootstrapper"): cannot assume ¬True(⌜n⌝) via prior derivation when it was never derived',
+      _inline: () => {
+        // Premise P on line 1. Derive True(⌜P⌝) on line 2. Try to assume ¬True(⌜P⌝)
+        // claiming prior derivation — but ¬True(⌜P⌝) was never derived on any line.
+        // Prior derivation must not fire; assumption blocked because
+        // falsifiabilityVerified: false.
+        const fakeProof = [
+          { type: 'premise',    formula: 'P',           justification: 'Pr',    depth: 0 }, // idx 0
+          { type: 'step',       formula: 'True(⌜P⌝)',   justification: 'TI 1',  depth: 0 }, // idx 1
+          { type: 'assumption', formula: '¬True(⌜P⌝)',  justification: 'As',    depth: 1,   // idx 2
+            falsifiabilityVerified: false,
+            falsifiabilityError: 'test: not certified' },
+        ];
+        // Prior derivation: is ¬True(⌜P⌝) on a prior accessible line? No — only P and True(⌜P⌝) exist.
+        const r = checkLine(fakeProof, 2);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'prior derivation incorrectly fired for ¬True(⌜P⌝) which was never derived' : ''
+        };
+      }
+    },
+
+    {
+      name: 'Prior-derivation #9 (negative, "Full ⊥ attempt"): complete proof attempt ending in ⊥ at depth 0 — must be blocked',
+      _inline: () => {
+        // Full attack proof from no premises. Derives P∨¬P via IP, then attempts
+        // to smuggle ¬(P∨¬P) out of the closed IP subproof to obtain ⊥ at depth 0.
+        // Every line has an explicit justification. The checker must reject at least one.
+        const fakeProof = [
+          { type: 'assumption', formula: '¬(P∨¬P)', justification: 'As',     depth: 1 }, // idx 0
+          { type: 'assumption', formula: 'P',        justification: 'As',     depth: 2 }, // idx 1
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 2',   depth: 2 }, // idx 2
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,3', depth: 2 }, // idx 3
+          { type: 'step',       formula: '¬P',        justification: '¬I 2-4', depth: 1 }, // idx 4
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 5',   depth: 1 }, // idx 5
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,6', depth: 1 }, // idx 6
+          { type: 'step',       formula: 'P∨¬P',    justification: 'IP 1-7', depth: 0 }, // idx 7
+          // Re-assume P∨¬P (this is fine by prior derivation)
+          { type: 'assumption', formula: 'P∨¬P',    justification: 'As',     depth: 1 }, // idx 8
+          // ATTACK LINE: smuggle ¬(P∨¬P) from closed subproof
+          { type: 'step',       formula: '¬(P∨¬P)', justification: 'R 1',    depth: 1 }, // idx 9
+          { type: 'step',       formula: '⊥',        justification: '⊥I 9,10', depth: 1 }, // idx 10
+          { type: 'step',       formula: '(P∨¬P)→⊥', justification: '→I 9-11', depth: 0 }, // idx 11
+          { type: 'step',       formula: '⊥',        justification: '→E 12,8', depth: 0 }, // idx 12
+        ];
+        // Check that at least one line fails (should be idx 9: reiteration from closed subproof)
+        const results = fakeProof.map((_, i) => checkLine(fakeProof, i));
+        const anyFailed = results.some(r => !r.ok);
+        const attackLineFailed = !results[9].ok;
+        return {
+          ok: anyFailed && attackLineFailed,
+          details: anyFailed
+            ? (attackLineFailed ? '' : `expected idx 9 to fail but it passed; other failures: ${results.filter((r,i) => !r.ok).map((r,i) => `L${i+1}: ${r.msg}`).join('; ')}`)
+            : 'all lines accepted — ⊥ derivable from no premises!'
+        };
+      }
+    },
+
+    {
+      name: 'Prior-derivation #10 (negative, "The ∨E Extractor"): ∨E on tautology cannot extract individual disjuncts to depth 0',
+      _inline: () => {
+        // Derive P∨¬P. Use ∨E with two subproofs that each close to the same
+        // formula Q. The attack: inside the P case, cite ¬P from the closed IP subproof
+        // to derive ⊥, then X to get any Q. Must fail at the scope-violation step.
+        const fakeProof = [
+          { type: 'assumption', formula: '¬(P∨¬P)', justification: 'As',     depth: 1 }, // idx 0
+          { type: 'assumption', formula: 'P',        justification: 'As',     depth: 2 }, // idx 1
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 2',   depth: 2 }, // idx 2
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,3', depth: 2 }, // idx 3
+          { type: 'step',       formula: '¬P',        justification: '¬I 2-4', depth: 1 }, // idx 4
+          { type: 'step',       formula: 'P∨¬P',    justification: '∨I 5',   depth: 1 }, // idx 5
+          { type: 'step',       formula: '⊥',        justification: '⊥I 1,6', depth: 1 }, // idx 6
+          { type: 'step',       formula: 'P∨¬P',    justification: 'IP 1-7', depth: 0 }, // idx 7
+          // ∨E case 1: assume P (for ∨E)
+          { type: 'assumption', formula: 'P',        justification: 'As',     depth: 1 }, // idx 8
+          // ATTACK: cite ¬P from closed IP interior via ⊥I
+          { type: 'step',       formula: '⊥',        justification: '⊥I 9,5', depth: 1 }, // idx 9 — MUST FAIL
+          { type: 'step',       formula: 'Q',        justification: 'X 10',    depth: 1 }, // idx 10
+          // ∨E case 2: assume ¬P
+          { type: 'assumption', formula: '¬P',       justification: 'As',     depth: 1 }, // idx 11
+          { type: 'step',       formula: 'Q',        justification: 'X 10',    depth: 1 }, // idx 12 (bogus, depends on 10)
+          // Close ∨E
+          { type: 'step',       formula: 'Q',        justification: '∨E 8,9-11,12-13', depth: 0 }, // idx 13
+        ];
+        const r = checkLine(fakeProof, 9);
+        return {
+          ok: r.ok === false,
+          details: r.ok ? 'checker allowed ⊥I citing ¬P from closed subproof inside ∨E — any formula derivable!' : ''
+        };
+      }
+    },
+
+  ];
+
+  priorDerivationTests.forEach(script => {
     if (script._inline) {
       const r = script._inline();
       tests.push({ name: script.name, ok: r.ok, details: r.details });
