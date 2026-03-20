@@ -633,6 +633,61 @@ header span {
   margin-top: 8px;
   line-height: 1.5;
 }
+.def-submit-btn {
+  font-family: var(--mono);
+  font-size: .8rem;
+  padding: 6px 16px;
+  cursor: pointer;
+  background: var(--accent);
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  margin-top: 10px;
+  letter-spacing: .04em;
+}
+.def-submit-btn:hover { background: #1e4a70; }
+.def-submit-btn:disabled { opacity: .4; cursor: not-allowed; }
+.def-edit-btn {
+  font-family: var(--mono);
+  font-size: .78rem;
+  padding: 4px 12px;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  margin-top: 10px;
+}
+.def-edit-btn:hover { border-color: var(--accent); color: var(--ink); }
+
+/* Submitted definitions banner above proof */
+.submitted-defs {
+  padding: 10px 16px;
+  background: var(--accent-light);
+  border-bottom: 1px solid var(--border);
+  font-size: .85rem;
+  line-height: 1.6;
+}
+.submitted-defs-title {
+  font-family: var(--mono);
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--accent);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.submitted-defs-list {
+  font-family: var(--mono);
+  color: var(--ink);
+}
+.submitted-defs-list .def-entry {
+  margin-bottom: 2px;
+}
+.submitted-defs-list .def-entry .def-label {
+  color: var(--muted);
+  font-size: .78rem;
+}
 
 /* ─── FOL SYNTAX PANEL ─── */
 .fol-section {
@@ -830,6 +885,11 @@ header span {
       <div class="panel-body" id="defsBody">
         <div id="defsList"></div>
         <button class="def-add-btn" id="addDefBtn">+ Add Definition</button>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;">
+          <button class="def-submit-btn" id="submitDefsBtn">Submit Defined Terms</button>
+          <button class="def-edit-btn" id="editDefsBtn" style="display:none;">Edit Definitions</button>
+        </div>
+        <div id="defsValidationMsg" style="display:none;margin-top:6px;font-size:.82rem;color:#9b1c1c;"></div>
         <div class="def-note">
           Define named formulas for G&ouml;delian self-reference. Example: <code>Def L := ¬True(⌜L⌝)</code><br>
           Use <code>True(⌜NAME⌝)</code> in the proof to reference a defined name. Names: 1–5 uppercase letters.
@@ -846,6 +906,7 @@ header span {
           <button class="btn btn-ghost btn-sm" id="exportBtn" style="color:#fff;border-color:#555;">⬇ Export</button>
         </div>
       </div>
+      <div id="submittedDefsDisplay" style="display:none;"></div>
       <div class="proof-wrap">
         <table class="fitch-table" id="fitchTable">
           <tbody id="fitchBody"></tbody>
@@ -1101,6 +1162,7 @@ function mkId() { return 'r' + (++idCounter); }
 // Names must be uppercase letters (1-5 chars), e.g. "L", "CURRY".
 // The formula string can reference the name itself (self-referential) or other defined names.
 let namedDefinitions = [];
+let defsSubmitted = false;  // true after the user clicks "Submit Defined Terms"
 
 // ═══════════════════════════════════════════════════════════════
 // UNDO / REDO HISTORY
@@ -2807,6 +2869,9 @@ function render() {
       tbody.appendChild(certTr);
     }
   });
+
+  // Keep submitted definitions display in sync
+  if (typeof window._renderSubmittedDefs === 'function') window._renderSubmittedDefs();
 }
 
 function clearStatus() {
@@ -3042,6 +3107,54 @@ document.getElementById('symBar').addEventListener('click', e => {
     document.getElementById('defsToggleIcon').textContent = defsOpen ? '▼' : '▶';
   });
 
+  function setDefsEditable(editable) {
+    const list = document.getElementById('defsList');
+    list.querySelectorAll('input').forEach(inp => { inp.disabled = !editable; });
+    list.querySelectorAll('.def-del').forEach(btn => { btn.disabled = !editable; btn.style.opacity = editable ? '' : '.3'; btn.style.pointerEvents = editable ? '' : 'none'; });
+    document.getElementById('addDefBtn').disabled = !editable;
+    document.getElementById('addDefBtn').style.opacity = editable ? '' : '.3';
+    document.getElementById('addDefBtn').style.pointerEvents = editable ? '' : 'none';
+    document.getElementById('submitDefsBtn').style.display = editable ? '' : 'none';
+    document.getElementById('editDefsBtn').style.display = editable ? 'none' : '';
+  }
+
+  function renderSubmittedDefs() {
+    const display = document.getElementById('submittedDefsDisplay');
+    const validDefs = namedDefinitions.filter(d => d.name && d.formula && parse(d.formula));
+    if (!defsSubmitted || validDefs.length === 0) {
+      display.style.display = 'none';
+      return;
+    }
+    display.style.display = '';
+    display.innerHTML = '';
+    display.className = 'submitted-defs';
+    const title = document.createElement('div');
+    title.className = 'submitted-defs-title';
+    title.textContent = 'Defined Terms';
+    display.appendChild(title);
+    const listDiv = document.createElement('div');
+    listDiv.className = 'submitted-defs-list';
+    validDefs.forEach(def => {
+      const entry = document.createElement('div');
+      entry.className = 'def-entry';
+      const lbl = document.createElement('span');
+      lbl.className = 'def-label';
+      lbl.textContent = 'Def ';
+      const name = document.createElement('strong');
+      name.textContent = def.name;
+      const assign = document.createElement('span');
+      assign.textContent = ' := ';
+      assign.style.color = 'var(--muted)';
+      const formula = document.createElement('span');
+      formula.textContent = unparse(parse(def.formula));
+      entry.append(lbl, name, assign, formula);
+      listDiv.appendChild(entry);
+    });
+    display.appendChild(listDiv);
+  }
+  // Expose for render() calls
+  window._renderSubmittedDefs = renderSubmittedDefs;
+
   function renderDefs() {
     const list = document.getElementById('defsList');
     list.innerHTML = '';
@@ -3100,6 +3213,8 @@ document.getElementById('symBar').addEventListener('click', e => {
       renderDefStatus(i, row);
       list.appendChild(row);
     });
+    // Apply locked state if submitted
+    if (defsSubmitted) setDefsEditable(false);
   }
 
   function renderDefStatus(i, row) {
@@ -3153,6 +3268,53 @@ document.getElementById('symBar').addEventListener('click', e => {
     const rows = document.getElementById('defsList').querySelectorAll('.def-row');
     const last = rows[rows.length - 1];
     if (last) last.querySelector('.def-name')?.focus();
+  });
+
+  // Submit button: validate all definitions, lock the panel, show above proof
+  document.getElementById('submitDefsBtn').addEventListener('click', () => {
+    const msgEl = document.getElementById('defsValidationMsg');
+    // Remove empty rows
+    const filtered = namedDefinitions.filter(d => d.name || d.formula);
+    if (filtered.length === 0) {
+      msgEl.textContent = 'Add at least one definition before submitting.';
+      msgEl.style.display = '';
+      return;
+    }
+    // Validate each
+    const errors = [];
+    const names = new Set();
+    filtered.forEach((def, i) => {
+      if (!def.name) { errors.push(`Definition ${i+1}: missing name.`); return; }
+      if (!/^[A-Z][A-Z0-9]{0,4}$/.test(def.name)) { errors.push(`"${def.name}": invalid name (use 1–5 uppercase letters).`); return; }
+      if (names.has(def.name)) { errors.push(`"${def.name}": duplicate name.`); return; }
+      names.add(def.name);
+      if (!def.formula) { errors.push(`${def.name}: missing formula.`); return; }
+      const node = parse(def.formula);
+      if (!node) { errors.push(`${def.name}: not a well-formed formula.`); return; }
+    });
+    if (errors.length > 0) {
+      msgEl.innerHTML = errors.map(e => '• ' + e).join('<br>');
+      msgEl.style.display = '';
+      return;
+    }
+    // Commit: keep only valid defs, mark as submitted
+    namedDefinitions.length = 0;
+    filtered.forEach(d => namedDefinitions.push(d));
+    defsSubmitted = true;
+    msgEl.style.display = 'none';
+    renderDefs();
+    setDefsEditable(false);
+    renderSubmittedDefs();
+    invalidateAssumptionCerts();
+  });
+
+  // Edit button: unlock the definitions panel
+  document.getElementById('editDefsBtn').addEventListener('click', () => {
+    defsSubmitted = false;
+    setDefsEditable(true);
+    renderDefs();
+    document.getElementById('submittedDefsDisplay').style.display = 'none';
+    invalidateAssumptionCerts();
   });
 
   // Also hook into def-formula inputs for the symbol bar
