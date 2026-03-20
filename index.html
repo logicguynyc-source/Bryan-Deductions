@@ -557,6 +557,83 @@ header span {
   .main { grid-template-columns: 1fr; }
 }
 
+/* ─── DEFINITIONS PANEL ─── */
+#defsPanel { margin-bottom: 18px; }
+#defsPanel .panel-header { cursor: pointer; user-select: none; }
+#defsPanel .panel-header .defs-toggle { font-size: .85rem; opacity: .7; }
+.def-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.def-row .def-name {
+  font-family: var(--mono);
+  font-size: .92rem;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  width: 80px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.def-row .def-assign {
+  font-family: var(--mono);
+  font-size: .85rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.def-row .def-formula {
+  font-family: var(--mono);
+  font-size: .92rem;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  flex: 1;
+  background: var(--surface);
+  color: var(--ink);
+}
+.def-row .def-formula:focus,
+.def-row .def-name:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+  outline: none;
+}
+.def-row .def-del {
+  font-size: .78rem;
+  padding: 2px 6px;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+}
+.def-row .def-del:hover { color: var(--err); border-color: var(--err); }
+.def-status {
+  font-size: .78rem;
+  margin-top: 2px;
+}
+.def-status.ok  { color: var(--ok); }
+.def-status.err { color: var(--err); }
+#defsList { margin-bottom: 10px; }
+.def-add-btn {
+  font-family: var(--mono);
+  font-size: .78rem;
+  padding: 4px 12px;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+}
+.def-add-btn:hover { border-color: var(--accent); color: var(--ink); }
+.def-note {
+  font-size: .78rem;
+  color: var(--muted);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
 /* ─── FOL SYNTAX PANEL ─── */
 .fol-section {
   border-bottom: 1px solid var(--border);
@@ -691,6 +768,7 @@ header span {
   <ul>
     <li>From any accessible formula φ, you can derive <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>. And from any accessible <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>, you can derive φ.</li>
     <li>From any accessible line n, you can derive <code>True(⌜n⌝)</code>. And from any accessible line that states <code>True(⌜n⌝)</code>, you can derive the formula on line n.</li>
+    <li>Named definitions allow position-independent self-reference: <code>Def L := ¬True(⌜L⌝)</code> defines a Liar sentence. Use <code>True(⌜L⌝)</code> to refer to the named formula in the proof. TI/TE work with defined names just like with line numbers.</li>
     <li>Subderivations can explore what follows from assuming <code>True(⌜n⌝)</code> or <code>¬True(⌜n⌝)</code> for proof line n — including self-referential or forward-referential ones — as long as the assumption is either previously derived or falsifiable.</li>
   </ul>
   <p class="intro-key">The key innovation: assumptions must be either <em>previously derived</em> (the formula already appears on an accessible prior line) or <em>falsifiable</em> (there exists a coherent assignment of truth values under which the assumption is false). For ordinary formulas, falsifiability just means the formula isn't a tautology. For self-referential formulas like <code>True(⌜n⌝)</code> on line n, it means the assignment of truth values to the relevant lines must be internally consistent (a line can't be deemed both true and false) and must make the assumption false. These constraints are designed to prevent liar sentences, Curry sentences, and similar self-referential tricks from being used to derive a contradiction from the inference rules alone — while still allowing tautologies to be re-assumed once they have been established.</p>
@@ -739,6 +817,22 @@ header span {
             <strong>Warning:</strong> this conclusion is not derivable from these premises.
             <button onclick="document.getElementById('derivabilityWarning').style.display='none'" style="margin-left:10px;font-size:.78rem;padding:1px 7px;cursor:pointer;">Dismiss</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Named Definitions -->
+    <div class="panel" id="defsPanel" style="margin-bottom:18px;">
+      <div class="panel-header" id="defsPanelHeader">
+        <span>Named Definitions</span>
+        <span class="defs-toggle" id="defsToggleIcon">▼</span>
+      </div>
+      <div class="panel-body" id="defsBody">
+        <div id="defsList"></div>
+        <button class="def-add-btn" id="addDefBtn">+ Add Definition</button>
+        <div class="def-note">
+          Define named formulas for G&ouml;delian self-reference. Example: <code>Def L := ¬True(⌜L⌝)</code><br>
+          Use <code>True(⌜NAME⌝)</code> in the proof to reference a defined name. Names: 1–5 uppercase letters.
         </div>
       </div>
     </div>
@@ -844,7 +938,8 @@ header span {
         <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
         <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
         <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
-        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> (formula) or <code>True(⌜n⌝)</code> (line number) to assert truth. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝) or True(⌜m⌝). <strong>TE m</strong>: from True(⌜φ⌝) or True(⌜n⌝) on line m, derive the named formula. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
+        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> (formula), <code>True(⌜n⌝)</code> (line number), or <code>True(⌜NAME⌝)</code> (defined name) to assert truth. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝), True(⌜m⌝), or True(⌜NAME⌝). <strong>TE m</strong>: from a True(⌜…⌝) form on line m, derive the referenced formula. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
+        <p style="margin-top:6px;"><strong>Named definitions</strong> — Use the <em>Named Definitions</em> panel to define named formulas (e.g. <code>Def L := ¬True(⌜L⌝)</code>). Self-referential definitions are allowed. Use <code>True(⌜NAME⌝)</code> in your proof; TI/TE will match against the defined formula.</p>
       </div>
     </div>
 
@@ -926,6 +1021,7 @@ header span {
             <tr><td class="fol-ex"><code>⌜φ⌝</code></td><td>Name of formula φ (a term)</td></tr>
             <tr><td class="fol-ex"><code>True(⌜φ⌝)</code></td><td>Truth predicate: φ is true</td></tr>
             <tr><td class="fol-ex"><code>True(⌜n⌝)</code></td><td>Truth predicate: the formula on proof line n is true (n must refer to the line of a WFF)</td></tr>
+            <tr><td class="fol-ex"><code>True(⌜L⌝)</code></td><td>Truth predicate: the formula named L is true (L must be a defined name)</td></tr>
             <tr><td class="fol-ex"><code>∀x True(⌜Fx⌝)</code></td><td>Every Fx-instance is true</td></tr>
           </table>
           <div class="fol-note">⌜φ⌝ is a <em>quasi-quotation</em> term denoting φ. Unlike opaque quotation, variables inside ⌜⌝ still participate in substitution: instantiating x→a in ∀x&nbsp;True(⌜Fx⌝) yields True(⌜Fa⌝). Use the ⌜ ⌝ buttons in the symbol bar above.</div>
@@ -954,6 +1050,16 @@ header span {
               <td>TE (line no.)</td>
               <td><code>TE m</code></td>
               <td class="fol-note-cell">Line 6: <code>True(⌜3⌝)</code><br>Line 7: <code>P ∨ Q</code> &mdash; <code>TE 6</code><br><span style="font-size:.75rem">Derives the formula on line 3, whatever it is.</span></td>
+            </tr>
+            <tr>
+              <td>TI (def name)</td>
+              <td><code>TI m</code></td>
+              <td class="fol-note-cell">Def L := ¬True(⌜L⌝)<br>Line 1: <code>¬True(⌜L⌝)</code><br>Line 2: <code>True(⌜L⌝)</code> &mdash; <code>TI 1</code><br><span style="font-size:.75rem">Cited line must contain the formula that the name is defined as.</span></td>
+            </tr>
+            <tr>
+              <td>TE (def name)</td>
+              <td><code>TE m</code></td>
+              <td class="fol-note-cell">Def L := ¬True(⌜L⌝)<br>Line 3: <code>True(⌜L⌝)</code><br>Line 4: <code>¬True(⌜L⌝)</code> &mdash; <code>TE 3</code><br><span style="font-size:.75rem">Derives the definition formula that the name denotes.</span></td>
             </tr>
           </table>
         </div>
@@ -987,6 +1093,14 @@ let conclusionFormula = '';
 let lastFocused = null;
 let idCounter = 0;
 function mkId() { return 'r' + (++idCounter); }
+
+// ═══════════════════════════════════════════════════════════════
+// NAMED FORMULA DEFINITIONS
+// ═══════════════════════════════════════════════════════════════
+// Each entry: { name: string, formula: string }
+// Names must be uppercase letters (1-5 chars), e.g. "L", "CURRY".
+// The formula string can reference the name itself (self-referential) or other defined names.
+let namedDefinitions = [];
 
 // ═══════════════════════════════════════════════════════════════
 // UNDO / REDO HISTORY
@@ -1294,6 +1408,10 @@ function parseTerm(s) {
       const innerStr = s.slice(1, end).trim();
       // ⌜n⌝ where n is a positive integer referring to the proof line of a WFF — a line-number reference
       if (/^\d+$/.test(innerStr)) return { type: 'lineref', lineNum: parseInt(innerStr, 10) };
+      // ⌜NAME⌝ where NAME is a defined formula name — a definition reference
+      if (/^[A-Z][A-Z0-9]{0,4}$/.test(innerStr) && namedDefinitions.some(d => d.name === innerStr)) {
+        return { type: 'defref', name: innerStr };
+      }
       // ⌜φ⌝ — a quasi-quoted formula
       const inner = parseFOL(innerStr);
       return inner ? { type: 'quote', inner } : null;
@@ -1307,6 +1425,7 @@ function unparseTerm(term) {
   if (term.type === 'var') return term.name;
   if (term.type === 'quote') return '⌜' + unparse(term.inner) + '⌝';
   if (term.type === 'lineref') return '⌜' + term.lineNum + '⌝';
+  if (term.type === 'defref') return '⌜' + term.name + '⌝';
   if (typeof term === 'string') return term;
   return '?';
 }
@@ -1318,6 +1437,7 @@ function substTerm(term, v, t) {
   if (term.type === 'var') return term.name === v ? { type: 'var', name: t } : term;
   if (term.type === 'quote') return { type: 'quote', inner: substNode(term.inner, v, t) };
   if (term.type === 'lineref') return term;  // opaque — line numbers don't change under substitution
+  if (term.type === 'defref') return term;   // opaque — definition names don't change under substitution
   return term;
 }
 
@@ -1328,6 +1448,7 @@ function isFreeInTerm(v, term) {
   if (term.type === 'var') return term.name === v;
   if (term.type === 'quote') return isFreeInNode(v, term.inner);
   if (term.type === 'lineref') return false;
+  if (term.type === 'defref') return false;  // defined names contain no free variables
   return false;
 }
 
@@ -1517,6 +1638,9 @@ function satCollectAtoms(node, out) {
     case 'true':
       if (node.arg.type === 'lineref') {
         out.linerefs.add(node.arg.lineNum);
+      } else if (node.arg.type === 'defref') {
+        out.defrefs = out.defrefs || new Set();
+        out.defrefs.add(node.arg.name);
       } else if (node.arg.type === 'quote') {
         // True(⌜φ⌝): recurse into quoted formula to collect its atoms
         satCollectAtoms(node.arg.inner, out);
@@ -1579,6 +1703,9 @@ function satEval(node, model) {
       if (node.arg.type === 'lineref') {
         return !!model.linerefs[node.arg.lineNum];
       }
+      if (node.arg.type === 'defref') {
+        return !!model.defrefs?.[node.arg.name];
+      }
       if (node.arg.type === 'quote') {
         // True(⌜φ⌝) inherits φ's truth value
         return satEval(node.arg.inner, model);
@@ -1604,7 +1731,48 @@ function buildGroundCertData(formulaNode, proof) {
   const inProgress = new Set();
   const done = new Set();
   const cyclic = new Set(); // linerefs confirmed to be part of a cycle
+  // Parallel tracking for defrefs
+  const defInProgress = new Set();
+  const defDone = new Set();
+  const cyclicDefs = new Set(); // defined names that are part of a cycle
   let hasCycle = false;
+
+  // Returns true if defName is (or transitively depends on) a cyclic defref.
+  function chaseDefref(defName) {
+    if (defDone.has(defName))   return cyclicDefs.has(defName);
+    if (defInProgress.has(defName)) { hasCycle = true; cyclicDefs.add(defName); return true; }
+    defInProgress.add(defName);
+    const def = namedDefinitions.find(d => d.name === defName);
+    let isCyclic = false;
+    if (def && def.formula) {
+      const defNode = parse(def.formula);
+      if (defNode) {
+        const defAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set(), defrefs: new Set() };
+        satCollectAtoms(defNode, defAtoms);
+        for (const dep of defAtoms.linerefs) { if (chaseLineref(dep)) isCyclic = true; }
+        for (const dep of (defAtoms.defrefs || [])) { if (chaseDefref(dep)) isCyclic = true; }
+        if (isCyclic) {
+          cyclicDefs.add(defName);
+        } else {
+          for (const p of defAtoms.props) groundAtoms.props.add(p);
+          defAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
+          for (const v of defAtoms.freeVars) groundAtoms.freeVars.add(v);
+          evalChain.push({ defName, node: defNode });
+        }
+        defDone.add(defName);
+      } else {
+        isCyclic = true;
+        cyclicDefs.add(defName);
+        defDone.add(defName);
+      }
+    } else {
+      isCyclic = true;
+      cyclicDefs.add(defName);
+      defDone.add(defName);
+    }
+    defInProgress.delete(defName);
+    return isCyclic;
+  }
 
   // Returns true if lineNum is (or transitively depends on) a cyclic lineref.
   function chaseLineref(lineNum) {
@@ -1616,9 +1784,10 @@ function buildGroundCertData(formulaNode, proof) {
     if (proofIdx >= 0 && proofIdx < proof.length && proof[proofIdx] && proof[proofIdx].formula) {
       const lineNode = parse(proof[proofIdx].formula);
       if (lineNode) {
-        const lineAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+        const lineAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set(), defrefs: new Set() };
         satCollectAtoms(lineNode, lineAtoms);
         for (const dep of lineAtoms.linerefs) { if (chaseLineref(dep)) isCyclic = true; }
+        for (const dep of (lineAtoms.defrefs || [])) { if (chaseDefref(dep)) isCyclic = true; }
         if (isCyclic) {
           cyclic.add(lineNum);
         } else {
@@ -1645,12 +1814,13 @@ function buildGroundCertData(formulaNode, proof) {
   }
 
   // Collect atoms directly on the formula itself (e.g. True(⌜φ⌝) with a quoted formula)
-  const topAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+  const topAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set(), defrefs: new Set() };
   satCollectAtoms(formulaNode, topAtoms);
   for (const p of topAtoms.props) groundAtoms.props.add(p);
   topAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
   for (const v of topAtoms.freeVars) groundAtoms.freeVars.add(v);
   for (const lineNum of topAtoms.linerefs) chaseLineref(lineNum);
+  for (const defName of (topAtoms.defrefs || [])) chaseDefref(defName);
 
   // Tautology check (propositional only, no FOL)
   let isTautology = false;
@@ -1658,10 +1828,14 @@ function buildGroundCertData(formulaNode, proof) {
     const propKeys = [...groundAtoms.props];
     const n = propKeys.length;
     function evalWithChain(propMask) {
-      const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+      const model = { props: {}, ext: {}, vars: {}, linerefs: {}, defrefs: {}, domain: [] };
       propKeys.forEach((k, i) => { model.props[k] = !!(propMask >> i & 1); });
-      for (const { lineNum, node: lineNode } of evalChain) {
-        model.linerefs[lineNum] = satEval(lineNode, model);
+      for (const entry of evalChain) {
+        if (entry.lineNum !== undefined) {
+          model.linerefs[entry.lineNum] = satEval(entry.node, model);
+        } else if (entry.defName !== undefined) {
+          model.defrefs[entry.defName] = satEval(entry.node, model);
+        }
       }
       return satEval(formulaNode, model);
     }
@@ -1676,7 +1850,7 @@ function buildGroundCertData(formulaNode, proof) {
     }
   }
 
-  return { groundAtoms, evalChain, hasCycle, isTautology, cycleRefs: cyclic };
+  return { groundAtoms, evalChain, hasCycle, isTautology, cycleRefs: cyclic, cyclicDefs };
 }
 
 // Enumerate all 2^n propositional+lineref assignments and check tautology/sat/contradiction.
@@ -2386,7 +2560,19 @@ function checkLine(proof, idx) {
         return { ok: true };
       }
 
-      return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝ or a line number ⌜n⌝' };
+      if (tiArg.type === 'defref') {
+        // True(⌜NAME⌝) — the defined name names a formula; TI requires that formula on the cited line
+        const def = namedDefinitions.find(d => d.name === tiArg.name);
+        if (!def) return { ok: false, msg: `TI: no definition found for name "${tiArg.name}"` };
+        if (lines.length < 1) return { ok: false, msg: 'TI needs 1 line reference (e.g. TI 3)' };
+        const tiPhi = normalizeFormula(L(lines[0]) || '');
+        const defFormula = normalizeFormula(def.formula);
+        if (!formulasEqual(tiPhi, defFormula))
+          return { ok: false, msg: `TI: line ${lines[0]+1} is "${tiPhi}", but ${tiArg.name} is defined as "${defFormula}"` };
+        return { ok: true };
+      }
+
+      return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝, a line number ⌜n⌝, or a defined name ⌜NAME⌝' };
     }
 
     case 'TE': case 'TRUE-E': {
@@ -2421,7 +2607,17 @@ function checkLine(proof, idx) {
         return { ok: true };
       }
 
-      return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝ or a line number ⌜n⌝' };
+      if (teArg.type === 'defref') {
+        // (c) defined name reference — derive the definition formula.
+        const def = namedDefinitions.find(d => d.name === teArg.name);
+        if (!def) return { ok: false, msg: `TE: no definition found for name "${teArg.name}"` };
+        const defFormula = normalizeFormula(def.formula);
+        if (!formulasEqual(f, defFormula))
+          return { ok: false, msg: `TE: ${teArg.name} is defined as "${defFormula}", but current line is "${f}"` };
+        return { ok: true };
+      }
+
+      return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝, a line number ⌜n⌝, or a defined name ⌜NAME⌝' };
     }
 
     default:
@@ -2834,6 +3030,145 @@ document.getElementById('symBar').addEventListener('click', e => {
     active.dispatchEvent(new Event('input'));
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// NAMED DEFINITIONS PANEL
+// ═══════════════════════════════════════════════════════════════
+(function () {
+  let defsOpen = true;
+  document.getElementById('defsPanelHeader').addEventListener('click', () => {
+    defsOpen = !defsOpen;
+    document.getElementById('defsBody').style.display = defsOpen ? '' : 'none';
+    document.getElementById('defsToggleIcon').textContent = defsOpen ? '▼' : '▶';
+  });
+
+  function renderDefs() {
+    const list = document.getElementById('defsList');
+    list.innerHTML = '';
+    namedDefinitions.forEach((def, i) => {
+      const row = document.createElement('div');
+      row.className = 'def-row';
+      const nameLbl = document.createElement('span');
+      nameLbl.style.cssText = 'font-family:var(--mono);font-size:.82rem;color:var(--muted);flex-shrink:0';
+      nameLbl.textContent = 'Def';
+      const nameInp = document.createElement('input');
+      nameInp.type = 'text';
+      nameInp.className = 'def-name';
+      nameInp.value = def.name;
+      nameInp.placeholder = 'NAME';
+      nameInp.addEventListener('change', e => {
+        const val = e.target.value.trim().toUpperCase();
+        if (val && /^[A-Z][A-Z0-9]{0,4}$/.test(val)) {
+          namedDefinitions[i].name = val;
+          e.target.value = val;
+          invalidateAssumptionCerts();
+          renderDefStatus(i, row);
+        } else {
+          e.target.value = namedDefinitions[i].name;
+        }
+      });
+      const assign = document.createElement('span');
+      assign.className = 'def-assign';
+      assign.textContent = ':=';
+      const formulaInp = document.createElement('input');
+      formulaInp.type = 'text';
+      formulaInp.className = 'def-formula';
+      formulaInp.value = def.formula;
+      formulaInp.placeholder = 'e.g. ¬True(⌜L⌝)';
+      formulaInp.addEventListener('blur', e => {
+        const val = preprocessInput(e.target.value);
+        namedDefinitions[i].formula = val;
+        e.target.value = val;
+        invalidateAssumptionCerts();
+        renderDefStatus(i, row);
+      });
+      const delBtn = document.createElement('button');
+      delBtn.className = 'def-del';
+      delBtn.textContent = '×';
+      delBtn.title = 'Remove this definition';
+      delBtn.addEventListener('click', () => {
+        namedDefinitions.splice(i, 1);
+        invalidateAssumptionCerts();
+        renderDefs();
+      });
+      row.append(nameLbl, nameInp, assign, formulaInp, delBtn);
+      // Status line
+      const status = document.createElement('div');
+      status.className = 'def-status';
+      status.id = 'def-status-' + i;
+      row.appendChild(status);
+      renderDefStatus(i, row);
+      list.appendChild(row);
+    });
+  }
+
+  function renderDefStatus(i, row) {
+    const def = namedDefinitions[i];
+    const statusEl = row.querySelector('.def-status');
+    if (!statusEl) return;
+    if (!def.name) {
+      statusEl.textContent = '';
+      return;
+    }
+    if (!def.formula) {
+      statusEl.textContent = 'Enter a formula.';
+      statusEl.className = 'def-status err';
+      return;
+    }
+    const node = parse(def.formula);
+    if (!node) {
+      statusEl.textContent = 'Not a well-formed formula.';
+      statusEl.className = 'def-status err';
+      return;
+    }
+    // Check for duplicate names
+    const dupes = namedDefinitions.filter(d => d.name === def.name);
+    if (dupes.length > 1) {
+      statusEl.textContent = 'Duplicate name.';
+      statusEl.className = 'def-status err';
+      return;
+    }
+    statusEl.textContent = def.name + ' := ' + unparse(node);
+    statusEl.className = 'def-status ok';
+  }
+
+  // When definitions change, invalidate all assumption certifications
+  // (they may depend on definitions that just changed)
+  function invalidateAssumptionCerts() {
+    proof.forEach(row => {
+      if (row.type === 'assumption' && row.falsifiabilityVerified !== null) {
+        row.falsifiabilityVerified = null;
+        row._certifiedByPriorLine = false;
+      }
+    });
+    openCertifyIdx = null;
+    if (proof.length > 0) render();
+    clearStatus();
+  }
+
+  document.getElementById('addDefBtn').addEventListener('click', () => {
+    namedDefinitions.push({ name: '', formula: '' });
+    renderDefs();
+    // Focus the new name input
+    const rows = document.getElementById('defsList').querySelectorAll('.def-row');
+    const last = rows[rows.length - 1];
+    if (last) last.querySelector('.def-name')?.focus();
+  });
+
+  // Also hook into def-formula inputs for the symbol bar
+  document.addEventListener('focusin', e => {
+    if (e.target.classList.contains('def-formula')) {
+      pinnedInput = e.target;
+      lastFocused = e.target;
+    }
+  });
+
+  // Expose renderDefs for use after clearing
+  window._renderDefs = renderDefs;
+
+  // Initial render
+  renderDefs();
+})();
 
 // ═══════════════════════════════════════════════════════════════
 // RULES REFERENCE PANEL
@@ -4099,6 +4434,139 @@ function runDevSelfTests() {
     }
   });
 
+  // ─── Named Definition Tests ─────────────────────────────────
+  const savedDefs = JSON.parse(JSON.stringify(namedDefinitions));
+
+  // Test: TI with defref — from the definition formula, derive True(⌜NAME⌝)
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const fakeProof = [
+      { type: 'premise', formula: '¬True(⌜L⌝)', justification: 'Pr', depth: 0 },
+      { type: 'step',    formula: 'True(⌜L⌝)',  justification: 'TI 1', depth: 0 },
+    ];
+    const r = checkLine(fakeProof, 1);
+    tests.push({ name: 'Def #1 (TI defref): True(⌜L⌝) from ¬True(⌜L⌝) via TI', ok: r.ok === true, details: r.ok ? '' : r.msg });
+  }
+
+  // Test: TE with defref — from True(⌜NAME⌝), derive the definition formula
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const fakeProof = [
+      { type: 'premise', formula: 'True(⌜L⌝)',  justification: 'Pr', depth: 0 },
+      { type: 'step',    formula: '¬True(⌜L⌝)', justification: 'TE 1', depth: 0 },
+    ];
+    const r = checkLine(fakeProof, 1);
+    tests.push({ name: 'Def #2 (TE defref): ¬True(⌜L⌝) from True(⌜L⌝) via TE', ok: r.ok === true, details: r.ok ? '' : r.msg });
+  }
+
+  // Test: TE with defref — wrong formula must fail
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const fakeProof = [
+      { type: 'premise', formula: 'True(⌜L⌝)', justification: 'Pr', depth: 0 },
+      { type: 'step',    formula: 'P',          justification: 'TE 1', depth: 0 },
+    ];
+    const r = checkLine(fakeProof, 1);
+    tests.push({ name: 'Def #3 (TE defref wrong formula): must reject P from True(⌜L⌝)', ok: r.ok === false, details: r.ok ? 'accepted wrong formula' : '' });
+  }
+
+  // Test: TI with defref — wrong cited formula must fail
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const fakeProof = [
+      { type: 'premise', formula: 'P',          justification: 'Pr', depth: 0 },
+      { type: 'step',    formula: 'True(⌜L⌝)', justification: 'TI 1', depth: 0 },
+    ];
+    const r = checkLine(fakeProof, 1);
+    tests.push({ name: 'Def #4 (TI defref wrong source): must reject True(⌜L⌝) from P via TI', ok: r.ok === false, details: r.ok ? 'accepted wrong source' : '' });
+  }
+
+  // Test: Parser recognizes ⌜L⌝ as defref when L is defined
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const node = parse('True(⌜L⌝)');
+    const ok = node && node.type === 'true' && node.arg && node.arg.type === 'defref' && node.arg.name === 'L';
+    tests.push({ name: 'Def #5 (parser defref): True(⌜L⌝) parsed as defref', ok: !!ok, details: ok ? '' : 'parsed as: ' + JSON.stringify(node) });
+  }
+
+  // Test: Parser treats ⌜L⌝ as formula quote when L is NOT defined
+  {
+    namedDefinitions.length = 0;
+    const node = parse('True(⌜L⌝)');
+    // Should NOT be a defref — should be quote (L is a propositional atom)
+    const ok = node && node.type === 'true' && node.arg && node.arg.type === 'quote';
+    tests.push({ name: 'Def #6 (parser no-def): True(⌜L⌝) without def L is a quote not defref', ok: !!ok, details: ok ? '' : 'parsed as: ' + JSON.stringify(node) });
+  }
+
+  // Test: Liar sentence — assumption True(⌜L⌝) where L := ¬True(⌜L⌝) must be unfalsifiable
+  // (self-referential cycle: True(⌜L⌝) means L is true, L is ¬True(⌜L⌝), so any consistent
+  //  assignment requires True(⌜L⌝) = NOT True(⌜L⌝), which is impossible)
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const node = parse('True(⌜L⌝)');
+    const gcd = buildGroundCertData(node, []);
+    // The definition is self-referential → cyclic → has cycle
+    tests.push({
+      name: 'Def #7 (Liar unfalsifiable): buildGroundCertData detects cycle for True(⌜L⌝) with L:=¬True(⌜L⌝)',
+      ok: gcd.hasCycle === true && gcd.cyclicDefs.has('L'),
+      details: gcd.hasCycle ? '' : 'no cycle detected'
+    });
+  }
+
+  // Test: Curry sentence — L := True(⌜L⌝) → ⊥
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'C', formula: 'True(⌜C⌝) → ⊥' });
+    const node = parse('True(⌜C⌝)');
+    const gcd = buildGroundCertData(node, []);
+    tests.push({
+      name: 'Def #8 (Curry cycle): buildGroundCertData detects cycle for True(⌜C⌝) with C:=True(⌜C⌝)→⊥',
+      ok: gcd.hasCycle === true && gcd.cyclicDefs.has('C'),
+      details: gcd.hasCycle ? '' : 'no cycle detected'
+    });
+  }
+
+  // Test: Non-cyclic definition — L := P ∧ Q (no self-reference)
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'S', formula: 'P ∧ Q' });
+    const node = parse('True(⌜S⌝)');
+    const gcd = buildGroundCertData(node, []);
+    tests.push({
+      name: 'Def #9 (non-cyclic): S := P∧Q has no cycle, ground atoms include P and Q',
+      ok: !gcd.hasCycle && gcd.groundAtoms.props.has('P') && gcd.groundAtoms.props.has('Q'),
+      details: gcd.hasCycle ? 'unexpected cycle' : (gcd.groundAtoms.props.has('P') ? '' : 'missing ground atoms')
+    });
+  }
+
+  // Test: Full Liar proof attempt — must be blocked
+  // Def L := ¬True(⌜L⌝)
+  // 1: True(⌜L⌝)             As   (self-referential → unfalsifiable → blocked)
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const fakeProof = [
+      { type: 'assumption', formula: 'True(⌜L⌝)', justification: 'As', depth: 1, falsifiabilityVerified: false,
+        falsifiabilityError: 'unfalsifiable' },
+    ];
+    const r = checkLine(fakeProof, 0);
+    tests.push({
+      name: 'Def #10 (Liar blocked): assumption True(⌜L⌝) with L:=¬True(⌜L⌝) must fail without cert',
+      ok: r.ok === false,
+      details: r.ok ? 'assumption was accepted!' : ''
+    });
+  }
+
+  // Restore definitions
+  namedDefinitions.length = 0;
+  savedDefs.forEach(d => namedDefinitions.push(d));
+
   const failed = tests.filter(t => !t.ok);
   if (failed.length) {
     console.group('[ND self-test] Failed');
@@ -4175,30 +4643,32 @@ function triggerAssumptionCertification(idx) {
     return;
   }
   proof[idx]._certifiedByPriorLine = false;
-  const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+  const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set(), defrefs: new Set() };
   satCollectAtoms(node, atoms);
 
-  // If the formula contains linerefs (True(⌜n⌝) forms), chase them to ground atoms
+  // If the formula contains linerefs or defrefs, chase them to ground atoms
   // so the certification strip shows the ground propositional variables instead.
   let certAtoms = atoms;
   let certEvalChain = null;
   let certHasCycle = false;
   let certIsTautology = false;
   let certCycleRefs = new Set();
-  if (atoms.linerefs.size > 0) {
+  let certCyclicDefs = new Set();
+  if (atoms.linerefs.size > 0 || (atoms.defrefs && atoms.defrefs.size > 0)) {
     const gcd = buildGroundCertData(node, proof);
     certAtoms = gcd.groundAtoms;
     certEvalChain = gcd.evalChain;
     certHasCycle = gcd.hasCycle;
     certIsTautology = gcd.isTautology;
     certCycleRefs = gcd.cycleRefs;
+    certCyclicDefs = gcd.cyclicDefs || new Set();
   }
 
   const isFOL = certAtoms.predicates.size > 0 || containsQuantifier(node) || certAtoms.freeVars.size > 0;
-  // hasNoVars is only true if there are genuinely no variables AND no unresolved cyclic linerefs
+  // hasNoVars is only true if there are genuinely no variables AND no unresolved cyclic linerefs/defrefs
   const hasNoVars = certAtoms.props.size === 0 && certAtoms.predicates.size === 0 &&
                     certAtoms.freeVars.size === 0 && certAtoms.linerefs.size === 0
-                    && certCycleRefs.size === 0;
+                    && certCycleRefs.size === 0 && certCyclicDefs.size === 0;
 
   proof[idx].falsifiabilityVerified = false;
   proof[idx].falsifiabilityError =
@@ -4210,6 +4680,7 @@ function triggerAssumptionCertification(idx) {
   proof[idx]._certHasCycle = certHasCycle;
   proof[idx]._certIsTautology = certIsTautology;
   proof[idx]._certCycleRefs = certCycleRefs;
+  proof[idx]._certCyclicDefs = certCyclicDefs;
   openCertifyIdx = idx;
   render();
 }
@@ -4221,6 +4692,7 @@ function buildCertifyRow(idx, colSpan) {
   const atoms = row._certAtoms || { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
   const isFOL = row._certIsFOL || false;
   const cycleRefs = row._certCycleRefs || new Set();
+  const cyclicDefs = row._certCyclicDefs || new Set();
   const formula = row.formula;  // show exactly what the student typed
 
   const tr = document.createElement('tr');
@@ -4278,6 +4750,22 @@ function buildCertifyRow(idx, colSpan) {
     lbl.textContent = 'Line ' + lineNum + ':';
     const sel = document.createElement('select');
     sel.id = 'certify-lineref-' + idx + '-' + lineNum;
+    sel.style.cssText = 'font-size:.85rem;padding:2px 4px';
+    ['T','F'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    wrap.appendChild(lbl); wrap.appendChild(sel);
+    fieldsDiv.appendChild(wrap);
+  });
+
+  // Cyclic defref fields: T/F dropdowns for ungrounded self-referential defrefs
+  const cyclicDefList = [...cyclicDefs].sort();
+  cyclicDefList.forEach(defName => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
+    const lbl = document.createElement('label');
+    lbl.style.fontFamily = 'var(--mono)';
+    lbl.textContent = defName + ':';
+    const sel = document.createElement('select');
+    sel.id = 'certify-defref-' + idx + '-' + defName;
     sel.style.cssText = 'font-size:.85rem;padding:2px 4px';
     ['T','F'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
     wrap.appendChild(lbl); wrap.appendChild(sel);
@@ -4380,10 +4868,21 @@ function buildCertifyRow(idx, colSpan) {
       model.linerefs[lineNum] = sel ? sel.value === 'T' : false;
     });
 
-    // Resolve grounded lineref chain
+    // Populate cyclic defrefs from user's T/F assignments
+    model.defrefs = {};
+    cyclicDefList.forEach(defName => {
+      const sel = document.getElementById('certify-defref-' + idx + '-' + defName);
+      model.defrefs[defName] = sel ? sel.value === 'T' : false;
+    });
+
+    // Resolve grounded lineref/defref chain
     if (row._certEvalChain) {
-      for (const { lineNum, node: lineNode } of row._certEvalChain) {
-        model.linerefs[lineNum] = satEval(lineNode, model);
+      for (const entry of row._certEvalChain) {
+        if (entry.lineNum !== undefined) {
+          model.linerefs[entry.lineNum] = satEval(entry.node, model);
+        } else if (entry.defName !== undefined) {
+          model.defrefs[entry.defName] = satEval(entry.node, model);
+        }
       }
     }
 
@@ -4399,6 +4898,25 @@ function buildCertifyRow(idx, colSpan) {
             const deemed = model.linerefs[lineNum] ? 'true' : 'false';
             const implied = model.linerefs[lineNum] ? 'false' : 'true';
             resultSpan.textContent = '✗ Inconsistent interpretation: deeming line ' + lineNum + ' ' + deemed + ' implies that you also deem line ' + lineNum + ' to be ' + implied + '.';
+            resultSpan.className = 'certify-result err';
+            return;
+          }
+        }
+      }
+    }
+
+    // Consistency check for cyclic defrefs: the definition's formula must evaluate
+    // to the same truth value the user assigned to the name.
+    for (const defName of cyclicDefList) {
+      const def = namedDefinitions.find(d => d.name === defName);
+      if (def && def.formula) {
+        const defNode = parse(def.formula);
+        if (defNode) {
+          const defVal = satEval(defNode, model);
+          if (defVal !== model.defrefs[defName]) {
+            const deemed = model.defrefs[defName] ? 'true' : 'false';
+            const implied = model.defrefs[defName] ? 'false' : 'true';
+            resultSpan.textContent = '✗ Inconsistent interpretation: deeming ' + defName + ' ' + deemed + ' implies that you also deem ' + defName + ' to be ' + implied + '.';
             resultSpan.className = 'certify-result err';
             return;
           }
