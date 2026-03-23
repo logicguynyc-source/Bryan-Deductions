@@ -822,11 +822,10 @@ header span {
   Bryan Deduction is a Fitch-style natural deduction system extended with a truth predicate. It uses a quotational syntax with no restrictions on formula content. Key differences from standard systems:
   <ul>
     <li>From any accessible formula φ, you can derive <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>. And from any accessible <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>, you can derive φ.</li>
-    <li>From any accessible line n, you can derive <code>True(⌜n⌝)</code>. And from any accessible line that states <code>True(⌜n⌝)</code>, you can derive the formula on line n.</li>
-    <li>Named definitions allow position-independent self-reference: <code>Def L := ¬True(⌜L⌝)</code> defines a Liar sentence. Use <code>True(⌜L⌝)</code> to refer to the named formula in the proof. TI/TE work with defined names just like with line numbers.</li>
-    <li>Subderivations can explore what follows from assuming <code>True(⌜n⌝)</code> or <code>¬True(⌜n⌝)</code> for proof line n — including self-referential or forward-referential ones — as long as the assumption is either previously derived or falsifiable.</li>
+    <li>Named definitions allow position-independent self-reference: <code>Def L := ¬True(⌜L⌝)</code> defines a Liar sentence. Use <code>True(⌜L⌝)</code> to refer to the named formula in the proof. TI/TE work with defined names the same way they work with quoted formulas.</li>
+    <li>Subderivations can explore what follows from assuming <code>True(⌜NAME⌝)</code> or <code>¬True(⌜NAME⌝)</code> for any defined name — including self-referential ones — as long as the assumption is either previously derived or falsifiable.</li>
   </ul>
-  <p class="intro-key">The key innovation: assumptions must be either <em>previously derived</em> (the formula already appears on an accessible prior line) or <em>falsifiable</em> (there exists a coherent assignment of truth values under which the assumption is false). For ordinary formulas, falsifiability just means the formula isn't a tautology. For self-referential formulas like <code>True(⌜n⌝)</code> on line n, it means the assignment of truth values to the relevant lines must be internally consistent (a line can't be deemed both true and false) and must make the assumption false. These constraints are designed to prevent liar sentences, Curry sentences, and similar self-referential tricks from being used to derive a contradiction from the inference rules alone — while still allowing tautologies to be re-assumed once they have been established.</p>
+  <p class="intro-key">The key innovation: assumptions must be either <em>previously derived</em> (the formula already appears on an accessible prior line) or <em>falsifiable</em> (there exists a coherent assignment of truth values under which the assumption is false). For ordinary formulas, falsifiability just means the formula isn't a tautology. For self-referential formulas like <code>True(⌜L⌝)</code> where <code>Def L := ¬True(⌜L⌝)</code>, it means the assignment of truth values must be internally consistent and must make the assumption false. These constraints are designed to prevent liar sentences, Curry sentences, and similar self-referential tricks from being used to derive a contradiction from the inference rules alone — while still allowing tautologies to be re-assumed once they have been established.</p>
 </div>
 
 <!-- SYMBOL BAR -->
@@ -999,7 +998,7 @@ header span {
         <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
         <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
         <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
-        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> (formula), <code>True(⌜n⌝)</code> (line number), or <code>True(⌜NAME⌝)</code> (defined name) to assert truth. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝), True(⌜m⌝), or True(⌜NAME⌝). <strong>TE m</strong>: from a True(⌜…⌝) form on line m, derive the referenced formula. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
+        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> (quoted formula) or <code>True(⌜NAME⌝)</code> (defined name) to assert truth. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝) or True(⌜NAME⌝). <strong>TE m</strong>: from a True(⌜…⌝) form on line m, derive the referenced formula. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
         <p style="margin-top:6px;"><strong>Named definitions</strong> — Use the <em>Named Definitions</em> panel to define named formulas (e.g. <code>Def L := ¬True(⌜L⌝)</code>). Self-referential definitions are allowed. Use <code>True(⌜NAME⌝)</code> in your proof; TI/TE will match against the defined formula.</p>
       </div>
     </div>
@@ -1021,7 +1020,8 @@ header span {
               <li>Any single lowercase letter (<code>a</code>–<code>z</code>) standing alone &mdash; a propositional variable</li>
               <li>An uppercase letter followed by one or more lowercase term letters (e.g. <code>Fx</code>, <code>Gxy</code>) &mdash; a predicate application. (<code>Ax</code> and <code>Ex</code> are reserved for quantifier shorthands and are not WFFs.)</li>
               <li><code>t<sub>1</sub> = t<sub>2</sub></code> where t<sub>1</sub> and t<sub>2</sub> are lowercase term letters &mdash; an identity statement</li>
-              <li><code>True(⌜n⌝)</code> where n is a positive integer &mdash; the truth predicate applied to a line-number reference. (The proof-time constraint that line n must contain a WFF is a semantic condition, not a grammatical one.)</li>
+              <li><code>True(⌜NAME⌝)</code> where NAME is a defined formula name &mdash; the truth predicate applied to a named definition</li>
+
             </ol>
             <strong>Recursive cases</strong> — if φ and ψ are WFFs and x is a variable, then so are:
             <ol style="margin:.4em 0 .6em 1.4em; padding:0" start="7">
@@ -1081,7 +1081,7 @@ header span {
           <table class="fol-table">
             <tr><td class="fol-ex"><code>⌜φ⌝</code></td><td>Name of formula φ (a term)</td></tr>
             <tr><td class="fol-ex"><code>True(⌜φ⌝)</code></td><td>Truth predicate: φ is true</td></tr>
-            <tr><td class="fol-ex"><code>True(⌜n⌝)</code></td><td>Truth predicate: the formula on proof line n is true (n must refer to the line of a WFF)</td></tr>
+
             <tr><td class="fol-ex"><code>True(⌜L⌝)</code></td><td>Truth predicate: the formula named L is true (L must be a defined name)</td></tr>
             <tr><td class="fol-ex"><code>∀x True(⌜Fx⌝)</code></td><td>Every Fx-instance is true</td></tr>
           </table>
@@ -1097,21 +1097,13 @@ header span {
               <td><code>TI m</code></td>
               <td class="fol-note-cell">Line 1: <code>P ∨ Q</code><br>Line 2: <code>True(⌜P ∨ Q⌝)</code> &mdash; <code>TI 1</code></td>
             </tr>
-            <tr>
-              <td>TI (line no.)</td>
-              <td><code>TI n</code></td>
-              <td class="fol-note-cell">Line 3: <code>P ∨ Q</code><br>Line 6: <code>True(⌜3⌝)</code> &mdash; <code>TI 3</code><br><span style="font-size:.75rem">The numeral inside ⌜⌝ must match the cited line number.</span></td>
-            </tr>
+
             <tr>
               <td>TE (formula)</td>
               <td><code>TE m</code></td>
               <td class="fol-note-cell">Line 2: <code>True(⌜P ∨ Q⌝)</code><br>Line 3: <code>P ∨ Q</code> &mdash; <code>TE 2</code></td>
             </tr>
-            <tr>
-              <td>TE (line no.)</td>
-              <td><code>TE m</code></td>
-              <td class="fol-note-cell">Line 6: <code>True(⌜3⌝)</code><br>Line 7: <code>P ∨ Q</code> &mdash; <code>TE 6</code><br><span style="font-size:.75rem">Derives the formula on line 3, whatever it is.</span></td>
-            </tr>
+
             <tr>
               <td>TI (def name)</td>
               <td><code>TI m</code></td>
@@ -1288,8 +1280,8 @@ const RULES = [
   { key: '∃E',  name: 'Existential Elim',       abbr: '∃E',  form: '∃x φx (m), [φc⊢ψ] (i–j) → ψ',            desc: 'From ∃x φ and a subproof from φ[c] to ψ (c not free in ψ or any undischarged assumption), derive ψ. Write as: ∃E m i–j.', lines: 3, isFOL: true },
   { key: '=E',  name: 'Identity Elim',          abbr: '=E',  form: 'a=b (m), φ[a] (n) → φ[b]',                desc: 'Substitute identicals: from a=b and φ[a], derive φ[b].', lines: 2, isFOL: true },
   // ── Truth Theory ──
-  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)  or  φ (m) → True(⌜m⌝)',   desc: 'Two forms. (1) Spell out the formula: from φ on line m, derive True(⌜φ⌝). Write: TI m. (2) Use a line number: from any formula on line n, derive True(⌜n⌝). Write: TI n with n matching the numeral inside the quotes.', lines: 1, isTruth: true },
-  { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ  or  True(⌜n⌝) (m) → formula on line n', desc: 'Two forms. (1) Formula-quote: from True(⌜φ⌝) on line m, derive φ. Write: TE m. (2) Line-number reference: from True(⌜n⌝) on line m, derive whatever formula is on line n. Write: TE m.', lines: 1, isTruth: true },
+  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)  or  True(⌜NAME⌝)',   desc: 'Two forms. (1) Spell out the formula: from φ on line m, derive True(⌜φ⌝). Write: TI m. (2) Use a defined name: if Def NAME := φ, from φ on line m, derive True(⌜NAME⌝). Write: TI m.', lines: 1, isTruth: true },
+  { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ  or  True(⌜NAME⌝) (m) → definition formula', desc: 'Two forms. (1) Formula-quote: from True(⌜φ⌝) on line m, derive φ. Write: TE m. (2) Defined name: from True(⌜NAME⌝) on line m (where Def NAME := φ), derive φ. Write: TE m.', lines: 1, isTruth: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -1468,8 +1460,6 @@ function parseTerm(s) {
     }
     if (end === s.length - 1) {
       const innerStr = s.slice(1, end).trim();
-      // ⌜n⌝ where n is a positive integer referring to the proof line of a WFF — a line-number reference
-      if (/^\d+$/.test(innerStr)) return { type: 'lineref', lineNum: parseInt(innerStr, 10) };
       // ⌜NAME⌝ where NAME is a defined formula name — a definition reference
       if (/^[A-Z][A-Z0-9]{0,4}$/.test(innerStr) && namedDefinitions.some(d => d.name === innerStr)) {
         return { type: 'defref', name: innerStr };
@@ -1486,30 +1476,25 @@ function unparseTerm(term) {
   if (!term) return '?';
   if (term.type === 'var') return term.name;
   if (term.type === 'quote') return '⌜' + unparse(term.inner) + '⌝';
-  if (term.type === 'lineref') return '⌜' + term.lineNum + '⌝';
   if (term.type === 'defref') return '⌜' + term.name + '⌝';
   if (typeof term === 'string') return term;
   return '?';
 }
 
 // Under quasi-quotation, substitution recurses inside ⌜…⌝.
-// Line-number references are opaque: substituting x→a inside ⌜3⌝ leaves it as ⌜3⌝.
 function substTerm(term, v, t) {
   if (!term) return term;
   if (term.type === 'var') return term.name === v ? { type: 'var', name: t } : term;
   if (term.type === 'quote') return { type: 'quote', inner: substNode(term.inner, v, t) };
-  if (term.type === 'lineref') return term;  // opaque — line numbers don't change under substitution
   if (term.type === 'defref') return term;   // opaque — definition names don't change under substitution
   return term;
 }
 
 // Under quasi-quotation, a variable is free inside ⌜…⌝.
-// Line-number references contain no variables, so isFreeInTerm is always false for them.
 function isFreeInTerm(v, term) {
   if (!term) return false;
   if (term.type === 'var') return term.name === v;
   if (term.type === 'quote') return isFreeInNode(v, term.inner);
-  if (term.type === 'lineref') return false;
   if (term.type === 'defref') return false;  // defined names contain no free variables
   return false;
 }
@@ -1659,9 +1644,9 @@ function evaluatePropositionalFormula(formula, env) {
 // ═══════════════════════════════════════════════════════════════
 
 // Collect all atomic propositions (TFL vars), FOL predicates, free variables,
-// and True(⌜n⌝) linerefs in a formula node.
+// and defrefs in a formula node.
 function satCollectAtoms(node, out) {
-  // out = { props: Set<string>, predicates: Map<name, arity>, freeVars: Set<string>, linerefs: Set<number> }
+  // out = { props: Set<string>, predicates: Map<name, arity>, freeVars: Set<string> }
   if (!node) return;
   switch (node.type) {
     case 'bot': break;
@@ -1698,9 +1683,7 @@ function satCollectAtoms(node, out) {
       out.freeVars.delete(node.variable);
       break;
     case 'true':
-      if (node.arg.type === 'lineref') {
-        out.linerefs.add(node.arg.lineNum);
-      } else if (node.arg.type === 'defref') {
+      if (node.arg.type === 'defref') {
         out.defrefs = out.defrefs || new Set();
         out.defrefs.add(node.arg.name);
       } else if (node.arg.type === 'quote') {
@@ -1717,7 +1700,6 @@ function satCollectAtoms(node, out) {
 //   ext:      { [pred]: Set<string> | Set<string> }  — predicates; for arity-1: Set of domain elements;
 //             for arity-n: Set of JSON-stringified n-tuples
 //   vars:     { [varName]: string } — current variable binding
-//   linerefs: { [n]: bool }         — truth value of "line n"
 //   domain:   string[]              — universe of discourse
 // }
 function satEval(node, model) {
@@ -1762,9 +1744,6 @@ function satEval(node, model) {
       });
     }
     case 'true': {
-      if (node.arg.type === 'lineref') {
-        return !!model.linerefs[node.arg.lineNum];
-      }
       if (node.arg.type === 'defref') {
         return !!model.defrefs?.[node.arg.name];
       }
@@ -1778,22 +1757,19 @@ function satEval(node, model) {
   return null;
 }
 
-// Chase True(⌜n⌝) lineref chains to ground propositional/FOL atoms.
-// Used by the certification strip so that e.g. assuming True(⌜n⌝) when line n is "p∨q"
-// shows p and q as the variables to assign, not a lineref.
+// Chase defref chains to ground propositional/FOL atoms.
+// Used by the certification strip so that e.g. assuming True(⌜L⌝) when L := p∨q
+// shows p and q as the variables to assign, not a defref.
 // Returns:
-//   groundAtoms  — { props, predicates, freeVars, linerefs } of the resolved ground formulas
-//   evalChain    — [{lineNum, node}] in dependency order (deps before dependents)
-//   hasCycle     — true if a circular lineref was detected (ungrounded)
+//   groundAtoms  — { props, predicates, freeVars } of the resolved ground formulas
+//   evalChain    — [{defName, node}] in dependency order (deps before dependents)
+//   hasCycle     — true if a circular defref was detected (ungrounded)
 //   isTautology  — true if the original formula is necessarily true given ground atoms
-//   cycleRefs    — Set of linerefs that are part of a cycle (need T/F assignment boxes)
+//   cyclicDefs   — Set of defined names that are part of a cycle (need T/F assignment boxes)
 function buildGroundCertData(formulaNode, proof) {
-  const groundAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+  const groundAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set() };
   const evalChain = [];
-  const inProgress = new Set();
-  const done = new Set();
-  const cyclic = new Set(); // linerefs confirmed to be part of a cycle
-  // Parallel tracking for defrefs
+  // Tracking for defrefs
   const defInProgress = new Set();
   const defDone = new Set();
   const cyclicDefs = new Set(); // defined names that are part of a cycle
@@ -1809,9 +1785,8 @@ function buildGroundCertData(formulaNode, proof) {
     if (def && def.formula) {
       const defNode = parse(def.formula);
       if (defNode) {
-        const defAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set(), defrefs: new Set() };
+        const defAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), defrefs: new Set() };
         satCollectAtoms(defNode, defAtoms);
-        for (const dep of defAtoms.linerefs) { if (chaseLineref(dep)) isCyclic = true; }
         for (const dep of (defAtoms.defrefs || [])) { if (chaseDefref(dep)) isCyclic = true; }
         if (isCyclic) {
           cyclicDefs.add(defName);
@@ -1836,52 +1811,12 @@ function buildGroundCertData(formulaNode, proof) {
     return isCyclic;
   }
 
-  // Returns true if lineNum is (or transitively depends on) a cyclic lineref.
-  function chaseLineref(lineNum) {
-    if (done.has(lineNum))   return cyclic.has(lineNum);
-    if (inProgress.has(lineNum)) { hasCycle = true; cyclic.add(lineNum); return true; }
-    inProgress.add(lineNum);
-    const proofIdx = lineNum - 1; // lineNum is 1-indexed; proof array is 0-indexed
-    let isCyclic = false;
-    if (proofIdx >= 0 && proofIdx < proof.length && proof[proofIdx] && proof[proofIdx].formula) {
-      const lineNode = parse(proof[proofIdx].formula);
-      if (lineNode) {
-        const lineAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set(), defrefs: new Set() };
-        satCollectAtoms(lineNode, lineAtoms);
-        for (const dep of lineAtoms.linerefs) { if (chaseLineref(dep)) isCyclic = true; }
-        for (const dep of (lineAtoms.defrefs || [])) { if (chaseDefref(dep)) isCyclic = true; }
-        if (isCyclic) {
-          cyclic.add(lineNum);
-        } else {
-          for (const p of lineAtoms.props) groundAtoms.props.add(p);
-          lineAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
-          for (const v of lineAtoms.freeVars) groundAtoms.freeVars.add(v);
-          evalChain.push({ lineNum, node: lineNode });
-        }
-        done.add(lineNum);
-      } else {
-        // Unparseable formula — treat as unresolved
-        isCyclic = true;
-        cyclic.add(lineNum);
-        done.add(lineNum);
-      }
-    } else {
-      // Line doesn't exist yet (forward ref) — treat as unresolved, needs T/F assignment
-      isCyclic = true;
-      cyclic.add(lineNum);
-      done.add(lineNum);
-    }
-    inProgress.delete(lineNum);
-    return isCyclic;
-  }
-
   // Collect atoms directly on the formula itself (e.g. True(⌜φ⌝) with a quoted formula)
-  const topAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set(), defrefs: new Set() };
+  const topAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), defrefs: new Set() };
   satCollectAtoms(formulaNode, topAtoms);
   for (const p of topAtoms.props) groundAtoms.props.add(p);
   topAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
   for (const v of topAtoms.freeVars) groundAtoms.freeVars.add(v);
-  for (const lineNum of topAtoms.linerefs) chaseLineref(lineNum);
   for (const defName of (topAtoms.defrefs || [])) chaseDefref(defName);
 
   // Tautology check (propositional only, no FOL)
@@ -1890,12 +1825,10 @@ function buildGroundCertData(formulaNode, proof) {
     const propKeys = [...groundAtoms.props];
     const n = propKeys.length;
     function evalWithChain(propMask) {
-      const model = { props: {}, ext: {}, vars: {}, linerefs: {}, defrefs: {}, domain: [] };
+      const model = { props: {}, ext: {}, vars: {}, defrefs: {}, domain: [] };
       propKeys.forEach((k, i) => { model.props[k] = !!(propMask >> i & 1); });
       for (const entry of evalChain) {
-        if (entry.lineNum !== undefined) {
-          model.linerefs[entry.lineNum] = satEval(entry.node, model);
-        } else if (entry.defName !== undefined) {
+        if (entry.defName !== undefined) {
           model.defrefs[entry.defName] = satEval(entry.node, model);
         }
       }
@@ -1912,19 +1845,18 @@ function buildGroundCertData(formulaNode, proof) {
     }
   }
 
-  return { groundAtoms, evalChain, hasCycle, isTautology, cycleRefs: cyclic, cyclicDefs };
+  return { groundAtoms, evalChain, hasCycle, isTautology, cycleRefs: new Set(), cyclicDefs };
 }
 
-// Enumerate all 2^n propositional+lineref assignments and check tautology/sat/contradiction.
+// Enumerate all 2^n propositional assignments and check tautology/sat/contradiction.
 // Only used when no quantifiers/predicates require a domain (purely propositional).
 function satSearchPropositional(node, atomKeys) {
   const n = atomKeys.length;
   let hasSat = false, hasUnsat = false;
   for (let mask = 0; mask < (1 << n); mask++) {
-    const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+    const model = { props: {}, ext: {}, vars: {}, domain: [] };
     atomKeys.forEach((k, i) => {
-      if (typeof k === 'number') model.linerefs[k] = !!(mask >> i & 1);
-      else model.props[k] = !!(mask >> i & 1);
+      model.props[k] = !!(mask >> i & 1);
     });
     const v = satEval(node, model);
     if (v) hasSat = true; else hasUnsat = true;
@@ -1947,7 +1879,7 @@ function satSearchFOL(node, atoms, domain, fixedVars = {}) {
   // Number of possible extensions for pred of arity k = 2^(|domain|^k).
   // We only search if total combinations ≤ 2^14 = 16384.
   const totalBits = preds.reduce((acc, [, arity]) => acc + Math.pow(domain.length, arity), 0)
-                  + atoms.props.size + atoms.linerefs.size;
+                  + atoms.props.size;
   if (totalBits > 14) return 'unknown';
 
   // Generate all possible extensions for each predicate
@@ -1960,7 +1892,6 @@ function satSearchFOL(node, atoms, domain, fixedVars = {}) {
   // Each predicate extension is a bitmask over its tuples
   const predTuples = preds.map(([, a]) => domainTuples(a));
   const propKeys = [...atoms.props];
-  const linerefKeys = [...atoms.linerefs];
 
   let hasSat = false, hasUnsat = false;
 
@@ -1968,11 +1899,10 @@ function satSearchFOL(node, atoms, domain, fixedVars = {}) {
     if (hasSat && hasUnsat) return;
     if (predIdx === preds.length) {
       // Now enumerate propositional combos
-      const nProp = propKeys.length + linerefKeys.length;
+      const nProp = propKeys.length;
       for (let mask = 0; mask < (1 << nProp); mask++) {
-        const model = { props: {}, ext: extSoFar, vars: { ...fixedVars }, linerefs: {}, domain };
+        const model = { props: {}, ext: extSoFar, vars: { ...fixedVars }, domain };
         propKeys.forEach((k, i) => { model.props[k] = !!(mask >> i & 1); });
-        linerefKeys.forEach((k, i) => { model.linerefs[k] = !!(mask >> (propKeys.length + i) & 1); });
         const v = satEval(node, model);
         if (v) hasSat = true; else hasUnsat = true;
         if (hasSat && hasUnsat) return;
@@ -2099,29 +2029,6 @@ function getFormulaAt(proof, idx) {
   return normalizeFormula(proof[idx].formula ?? "");
 }
 
-// Collect all forward linerefs in a formula node: True(⌜n⌝) where n > idx+1 (1-based).
-// Linerefs inside a quoted term (True(⌜φ⌝)) are intentionally NOT traversed, because
-// inside a quotation the numeral is the *name* of a formula identity, not a direct
-// assertion about a specific proof line.
-function collectForwardLinerefs(node, idx) {
-  if (!node) return [];
-  if (node.type === 'true') {
-    if (node.arg.type === 'lineref') {
-      // Direct forward reference: True(⌜n⌝) where n is beyond this line
-      return node.arg.lineNum > idx + 1 ? [node.arg.lineNum] : [];
-    }
-    // Quote arg: don't descend into the quoted formula
-    return [];
-  }
-  switch (node.type) {
-    case 'atom': case 'bot': case 'identity': return [];
-    case 'neg': return collectForwardLinerefs(node.sub, idx);
-    case '∧': case '∨': case '→': case '↔':
-      return [...collectForwardLinerefs(node.left, idx), ...collectForwardLinerefs(node.right, idx)];
-    case '∀': case '∃': return collectForwardLinerefs(node.formula, idx);
-    default: return [];
-  }
-}
 
 // Check whether the formula at proof[idx] already appears on a prior accessible line.
 // A line k < idx is "accessible" iff no line between k and idx has depth < proof[k].depth
@@ -2167,24 +2074,6 @@ function checkLine(proof, idx) {
   const row = proof[idx];
   const just = row.justification.trim();
 
-  // Ban forward linerefs in premises. A premise asserts a fact, so True(⌜5⌝)
-  // on line 2 is meaningless as a premise — line 5 doesn't exist yet.
-  // Assumptions are exempt: they are hypotheticals gated by the falsifiability
-  // constraint, and forward-referential assumptions are philosophically legitimate
-  // ("suppose whatever is on line n is true...").
-  // Derived steps are exempt: if a rule legitimately produces a formula containing
-  // a forward lineref (e.g. →I discharging a forward-referencing assumption),
-  // the result is valid. Individual rules (TI, TE) enforce their own ref checks.
-  if (row.type === 'premise' && row.formula.trim()) {
-    const _fwdParsed = parse(normalizeFormula(row.formula));
-    if (_fwdParsed) {
-      const _fwdRefs = collectForwardLinerefs(_fwdParsed, idx);
-      if (_fwdRefs.length > 0) {
-        return { ok: false, msg: `Premise references future line ${_fwdRefs[0]}, which has not been established yet` };
-      }
-    }
-  }
-
   if (row.type === 'premise') return { ok: true, msg: 'Premise' };
   if (row.type === 'assumption') {
     if (!row.formula.trim()) return { ok: true, msg: 'Assumption (subproof)' };
@@ -2213,10 +2102,7 @@ function checkLine(proof, idx) {
   const P = (n) => n >= 0 && n < proof.length ? parse(normalizeFormula(proof[n].formula)) : null;
 
   // Check line reference accessibility.
-  // True(⌜n⌝) via TI is warranted only if the formula on line n is currently established —
-  // i.e. accessible at the point of citation. Naming a discharged assumption does NOT make
-  // it true. So TI-lineref is subject to exactly the same scope rules as every other rule.
-  // Exception: TI handles its own self/forward-reference errors with more precise messages.
+  // A cited line is accessible only if its enclosing subproof has not been closed.
   const _isTI = j.rule === 'TI' || j.rule === 'TRUE-I';
   for (const li of lines) {
     if (li < 0 || li >= proof.length) return { ok: false, msg: `Line ${li+1} does not exist` };
@@ -2589,8 +2475,8 @@ function checkLine(proof, idx) {
     case 'TI': case 'TRUE-I': {
       // T-schema introduction.
       // Two forms:
-      //   (a) True(⌜φ⌝)  — spell out the formula.   Justify: TI m  (line m must have φ)
-      //   (b) True(⌜n⌝)  — cite a line number.     Justify: TI n  (n must match the numeral)
+      //   (a) True(⌜φ⌝)     — spell out the formula.   Justify: TI m  (line m must have φ)
+      //   (b) True(⌜NAME⌝) — cite a defined name.     Justify: TI m  (line m must have the definition formula)
       if (p?.type !== 'true') return { ok: false, msg: 'Formula must be True(⌜…⌝) for TI' };
       const { arg: tiArg } = p;
       if (!tiArg) return { ok: false, msg: 'TI: missing argument inside ⌜⌝' };
@@ -2605,22 +2491,6 @@ function checkLine(proof, idx) {
         return { ok: true };
       }
 
-      if (tiArg.type === 'lineref') {
-        const n    = tiArg.lineNum;   // 1-indexed line number the user typed
-        const nIdx = n - 1;           // 0-indexed
-
-        // Self-reference: line n is the very line being derived — not yet established.
-        if (nIdx === idx) return { ok: false, msg: `TI: nothing established so far guarantees that line ${n} is true — you cannot derive True(⌜${n}⌝) on line ${n} by citing line ${n} itself.` };
-
-        // Forward reference: line n hasn't been derived yet.
-        if (nIdx > idx) return { ok: false, msg: `TI: nothing established so far guarantees that line ${n} is true — line ${n} has not yet been derived.` };
-
-        // Backward reference: the cited justification line must equal n
-        if (lines.length < 1) return { ok: false, msg: `TI: write "TI ${n}" to assert line ${n} is true` };
-        if (lines[0] !== nIdx) return { ok: false, msg: `TI: justification cites line ${lines[0]+1} but ⌜${n}⌝ names line ${n}` };
-        if (!(L(nIdx) || '').trim()) return { ok: false, msg: `TI: line ${n} is empty` };
-        return { ok: true };
-      }
 
       if (tiArg.type === 'defref') {
         // True(⌜NAME⌝) — the defined name names a formula; TI requires that formula on the cited line
@@ -2634,14 +2504,14 @@ function checkLine(proof, idx) {
         return { ok: true };
       }
 
-      return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝, a line number ⌜n⌝, or a defined name ⌜NAME⌝' };
+      return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝ or a defined name ⌜NAME⌝' };
     }
 
     case 'TE': case 'TRUE-E': {
       // T-schema elimination.
       // Two forms:
-      //   (a) True(⌜φ⌝) on line m — derive φ.               Justify: TE m
-      //   (b) True(⌜n⌝)  on line m — derive formula on line n. Justify: TE m
+      //   (a) True(⌜φ⌝) on line m — derive φ.                       Justify: TE m
+      //   (b) True(⌜NAME⌝) on line m — derive the definition formula. Justify: TE m
       if (lines.length < 1) return { ok: false, msg: 'TE needs 1 line reference (the line with True(⌜…⌝))' };
       const teLine = P(lines[0]);
       if (teLine?.type !== 'true') return { ok: false, msg: `Line ${lines[0]+1} must be True(⌜…⌝) for TE` };
@@ -2656,21 +2526,9 @@ function checkLine(proof, idx) {
         return { ok: true };
       }
 
-      if (teArg.type === 'lineref') {
-        // (b) line-number reference — derive whatever is on that line.
-        // The falsifiability constraint on assumptions blocks Liar-style contradictions,
-        // so no additional accessibility check is needed here.
-        const n    = teArg.lineNum;
-        const nIdx = n - 1;
-        const refF = normalizeFormula(L(nIdx) || '');
-        if (!refF.trim()) return { ok: false, msg: `TE: line ${n} is empty` };
-        if (!formulasEqual(f, refF))
-          return { ok: false, msg: `TE: line ${n} has ""${refF}"", but current line is ""${f}""` };
-        return { ok: true };
-      }
 
       if (teArg.type === 'defref') {
-        // (c) defined name reference — derive the definition formula.
+        // (b) defined name reference — derive the definition formula.
         const def = namedDefinitions.find(d => d.name === teArg.name);
         if (!def) return { ok: false, msg: `TE: no definition found for name "${teArg.name}"` };
         const defFormula = normalizeFormula(def.formula);
@@ -2679,7 +2537,7 @@ function checkLine(proof, idx) {
         return { ok: true };
       }
 
-      return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝, a line number ⌜n⌝, or a defined name ⌜NAME⌝' };
+      return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝ or a defined name ⌜NAME⌝' };
     }
 
     default:
@@ -3960,31 +3818,45 @@ function runDevSelfTests() {
       ]
     },
     {
-      name: 'Truth #3: line-number reference roundtrip',
+      name: 'Truth #3: named-definition roundtrip (TI / TE with ⌜A⌝)',
+      // Def A := P ∨ Q
       // Line 1: P ∨ Q (premise)
-      // Line 2: step — True(⌜1⌝)  via TI 1
+      // Line 2: step — True(⌜A⌝)  via TI 1
       // Line 3: step — P ∨ Q      via TE 2
-      premises: ['P ∨ Q'],
-      conclusion: 'P ∨ Q',
-      lines: [
-        { depth: 0, formula: 'True(⌜1⌝)', justification: 'TI 1' },
-        { depth: 0, formula: 'P ∨ Q',     justification: 'TE 2' }
-      ]
+      _inline: () => {
+        const savedDefs = namedDefinitions;
+        const savedSubmitted = defsSubmitted;
+        try {
+          namedDefinitions = [{ name: 'A', formula: 'P ∨ Q' }];
+          defsSubmitted = true;
+          const fakeProof = [
+            { type: 'premise', formula: 'P ∨ Q',       justification: 'Pr',   depth: 0 },
+            { type: 'step',    formula: 'True(⌜A⌝)',   justification: 'TI 1', depth: 0 },
+            { type: 'step',    formula: 'P ∨ Q',       justification: 'TE 2', depth: 0 },
+          ];
+          const r1 = checkLine(fakeProof, 1);
+          if (!r1.ok) return { ok: false, details: 'TI with defref ⌜A⌝ rejected: ' + r1.msg };
+          const r2 = checkLine(fakeProof, 2);
+          if (!r2.ok) return { ok: false, details: 'TE with defref ⌜A⌝ rejected: ' + r2.msg };
+          return { ok: true, details: '' };
+        } finally {
+          namedDefinitions = savedDefs;
+          defsSubmitted = savedSubmitted;
+        }
+      }
     },
     {
-      name: 'Truth #4 (regression): self-referential truth-teller must now fail',
+      name: 'Truth #4 (regression): bare TI with no line citation must fail',
       _inline: () => {
-        // True(⌜3⌝) on line 3 (idx 2) with bare "TI" and no citation.
-        // The self-ref form has been removed, so this must be rejected.
+        // TI with no cited line number — just bare "TI" — is not a valid justification.
         const fakeProof = [
-          { type: 'premise', formula: 'P',         justification: 'Pr',  depth: 0 }, // idx 0
-          { type: 'step',    formula: 'True(⌜P⌝)', justification: 'TI 1', depth: 0 }, // idx 1
-          { type: 'step',    formula: 'True(⌜3⌝)', justification: 'TI',   depth: 0 }, // idx 2 — self-ref
+          { type: 'premise', formula: 'P',         justification: 'Pr',   depth: 0 }, // idx 0
+          { type: 'step',    formula: 'True(⌜P⌝)', justification: 'TI',   depth: 0 }, // idx 1 — bare TI, no citation
         ];
-        const r = checkLine(fakeProof, 2);
+        const r = checkLine(fakeProof, 1);
         return {
           ok: r.ok === false,
-          details: r.ok ? 'self-referential True(⌜3⌝) with bare TI was incorrectly accepted after removal of that form' : ''
+          details: r.ok ? 'bare TI (no citation) was incorrectly accepted' : ''
         };
       }
     },
@@ -4049,17 +3921,10 @@ function runDevSelfTests() {
         { depth: 0, formula: 'True(⌜P⌝) ∧ True(⌜Q⌝)', justification: '∧I 5,6' }
       ]
     },
-    // Regression: True(⌜n⌝) must NOT be licensed when line n is a discharged assumption
-    // that has not been re-established in the main proof.
-    // This proof mirrors the screenshot: p∧¬p assumed on line 1, discharged via ¬I,
-    // and then True(⌜1⌝) attempted — that step must be INVALID.
+    // Regression: TI citing a discharged assumption must fail.
+    // The formula on the cited line is inside a closed subproof and not accessible.
     {
       name: 'Truth #9 (regression): TI citing discharged assumption must fail',
-      premises: [],
-      conclusion: '⊥',
-      // We run checkLine directly on the offending step rather than via runScriptedProofTest,
-      // because runScriptedProofTest expects all lines to be valid.
-      // Instead we push a raw inline test that verifies the checker rejects the bad step.
       _inline: () => {
         const fakeProof = [
           // Line 1 (idx 0): assumption p∧¬p  at depth 1
@@ -4072,37 +3937,36 @@ function runDevSelfTests() {
           { type: 'step', formula: '⊥',    justification: '⊥I 2,3', depth: 1 },
           // Line 5 (idx 4): ¬(p∧¬p)  closes subproof at depth 0
           { type: 'step', formula: '¬(p∧¬p)', justification: '¬I 1-4', depth: 0 },
-          // Line 6 (idx 5): True(⌜1⌝) — citing discharged assumption — MUST FAIL
-          { type: 'step', formula: 'True(⌜1⌝)', justification: 'TI 1', depth: 0 }
+          // Line 6 (idx 5): True(⌜p∧¬p⌝) — citing discharged assumption formula — MUST FAIL
+          { type: 'step', formula: 'True(⌜p∧¬p⌝)', justification: 'TI 1', depth: 0 }
         ];
         const r = checkLine(fakeProof, 5);
-        return { ok: r.ok === false, details: r.ok ? 'checker incorrectly accepted True(⌜1⌝) citing a discharged assumption' : '' };
+        return { ok: r.ok === false, details: r.ok ? 'checker incorrectly accepted TI citing a discharged assumption' : '' };
       }
     },
 
     {
-      name: 'Truth #10 (regression): TE lineref where n is inside a closed subproof should succeed',
+      name: 'Truth #10 (regression): TE with defref resolves to definition formula',
       _inline: () => {
-        // Subproof A (lines 2-3, depth 1) derives P on line 3, then closes at line 4 (Q→P).
-        // Subproof B (line 5) assumes True(⌜3⌝) — line 3 is now inside closed subproof A.
-        // Before the TE accessibility check was removed, TE on True(⌜3⌝) would have been
-        // rejected with "Line 3 is inside a closed subproof".
-        // After removal, it should succeed because the TE premise (True(⌜3⌝) on line 5)
-        // is accessible and the formula-match check passes.
-        const fakeProof = [
-          { type: 'premise',    formula: 'P',          justification: 'Pr',    depth: 0 }, // idx 0 — line 1
-          { type: 'assumption', formula: 'Q',          justification: 'As',    depth: 1 }, // idx 1 — line 2, opens A
-          { type: 'step',       formula: 'P',          justification: 'R 1',   depth: 1 }, // idx 2 — line 3, inside A
-          { type: 'step',       formula: 'Q → P',      justification: '→I 2-3',depth: 0 }, // idx 3 — line 4, closes A
-          { type: 'assumption', formula: 'True(⌜3⌝)',  justification: 'As',    depth: 1,   // idx 4 — line 5, opens B
-            falsifiabilityVerified: true },                                                  //   True(⌜3⌝) references line 3 inside closed A
-          { type: 'step',       formula: 'P',          justification: 'TE 5',  depth: 1 }, // idx 5 — line 6
-        ];
-        const r = checkLine(fakeProof, 5);
-        return {
-          ok: r.ok === true,
-          details: r.ok ? '' : `TE lineref across closed subproof was incorrectly rejected: ${r.msg}`
-        };
+        // Def A := P, then True(⌜A⌝) as premise, TE yields P.
+        const savedDefs = namedDefinitions;
+        const savedSubmitted = defsSubmitted;
+        try {
+          namedDefinitions = [{ name: 'A', formula: 'P' }];
+          defsSubmitted = true;
+          const fakeProof = [
+            { type: 'premise',    formula: 'True(⌜A⌝)', justification: 'Pr',   depth: 0 },
+            { type: 'step',       formula: 'P',          justification: 'TE 1', depth: 0 },
+          ];
+          const r = checkLine(fakeProof, 1);
+          return {
+            ok: r.ok === true,
+            details: r.ok ? '' : `TE with defref ⌜A⌝ was incorrectly rejected: ${r.msg}`
+          };
+        } finally {
+          namedDefinitions = savedDefs;
+          defsSubmitted = savedSubmitted;
+        }
       }
     },
 
@@ -4216,70 +4080,93 @@ function runDevSelfTests() {
     },
 
     {
-      name: 'Negative #7: assumption with forward lineref is allowed (gated by falsifiability)',
+      name: 'Negative #7: TI with defref whose definition mismatches cited line must fail',
       _inline: () => {
-        // Line 1 (idx 0): assumption True(⌜3⌝) — references line 3, which doesn't exist yet.
-        // Forward-referential assumptions are now permitted; the falsifiability constraint
-        // gates them instead. With falsifiabilityVerified not set to false, checkLine
-        // should accept this assumption.
-        const fakeProof = [
-          { type: 'assumption', formula: 'True(⌜3⌝)', justification: 'As', depth: 1 }, // idx 0
-          { type: 'step',       formula: 'True(⌜3⌝)', justification: 'R 1', depth: 1 }, // idx 1
-        ];
-        const r = checkLine(fakeProof, 0);
-        return {
-          ok: r.ok === true,
-          details: r.ok ? '' : `forward-referential assumption should be allowed but got: ${r.msg}`
-        };
+        // Def A := Q, but line 1 has P. TI 1 producing True(⌜A⌝) should fail because P ≠ Q.
+        const savedDefs = namedDefinitions;
+        const savedSubmitted = defsSubmitted;
+        try {
+          namedDefinitions = [{ name: 'A', formula: 'Q' }];
+          defsSubmitted = true;
+          const fakeProof = [
+            { type: 'premise', formula: 'P',          justification: 'Pr',   depth: 0 },
+            { type: 'step',    formula: 'True(⌜A⌝)',  justification: 'TI 1', depth: 0 },
+          ];
+          const r = checkLine(fakeProof, 1);
+          return {
+            ok: r.ok === false,
+            details: r.ok ? 'TI incorrectly accepted True(⌜A⌝) when cited line has P but Def A := Q' : ''
+          };
+        } finally {
+          namedDefinitions = savedDefs;
+          defsSubmitted = savedSubmitted;
+        }
       }
     },
 
     {
-      name: 'Negative #8: premise with forward lineref must fail',
+      name: 'Negative #8: TI with undefined defref must fail',
       _inline: () => {
-        // A premise True(⌜5⌝) on line 1 references line 5, which is in the future.
-        const fakeProof = [
-          { type: 'premise', formula: 'True(⌜5⌝)', justification: 'Pr', depth: 0 }, // idx 0
-        ];
-        const r = checkLine(fakeProof, 0);
-        return {
-          ok: r.ok === false,
-          details: r.ok ? 'checker incorrectly accepted a premise containing a forward lineref True(⌜5⌝) on line 1' : ''
-        };
+        // ⌜Z⌝ is not a defined name — parser should reject or TI should fail.
+        const savedDefs = namedDefinitions;
+        const savedSubmitted = defsSubmitted;
+        try {
+          namedDefinitions = [];
+          defsSubmitted = true;
+          const fakeProof = [
+            { type: 'premise', formula: 'P',          justification: 'Pr',   depth: 0 },
+            { type: 'step',    formula: 'True(⌜Z⌝)',  justification: 'TI 1', depth: 0 },
+          ];
+          const r = checkLine(fakeProof, 1);
+          return {
+            ok: r.ok === false,
+            details: r.ok ? 'TI incorrectly accepted True(⌜Z⌝) when Z is not a defined name' : ''
+          };
+        } finally {
+          namedDefinitions = savedDefs;
+          defsSubmitted = savedSubmitted;
+        }
       }
     },
 
     {
-      name: 'Negative #9: forward lineref inside complex premise must fail',
+      name: 'Negative #9: TE with defref producing wrong formula must fail',
       _inline: () => {
-        // P ∧ True(⌜4⌝) as a premise on line 1 — the True(⌜4⌝) conjunct refers to line 4.
-        // Premises cannot contain forward linerefs (they are assertions, not hypotheticals).
-        const fakeProof = [
-          { type: 'premise', formula: 'P ∧ True(⌜4⌝)', justification: 'Pr', depth: 0 }, // idx 0
-        ];
-        const r = checkLine(fakeProof, 0);
-        return {
-          ok: r.ok === false,
-          details: r.ok ? 'checker incorrectly accepted premise P ∧ True(⌜4⌝) (forward ref to line 4)' : ''
-        };
+        // Def A := P, True(⌜A⌝) on line 1 — TE should yield P, but we write Q.
+        const savedDefs = namedDefinitions;
+        const savedSubmitted = defsSubmitted;
+        try {
+          namedDefinitions = [{ name: 'A', formula: 'P' }];
+          defsSubmitted = true;
+          const fakeProof = [
+            { type: 'premise', formula: 'True(⌜A⌝)', justification: 'Pr',   depth: 0 },
+            { type: 'step',    formula: 'Q',           justification: 'TE 1', depth: 0 },
+          ];
+          const r = checkLine(fakeProof, 1);
+          return {
+            ok: r.ok === false,
+            details: r.ok ? 'TE incorrectly accepted Q from True(⌜A⌝) when Def A := P' : ''
+          };
+        } finally {
+          namedDefinitions = savedDefs;
+          defsSubmitted = savedSubmitted;
+        }
       }
     },
 
     {
-      name: 'Negative #10 (regression): self-referential TI must now be rejected',
+      name: 'Negative #10 (regression): bare TI (no line citation) must be rejected',
       _inline: () => {
-        // True(⌜3⌝) on line 3 (idx 2) with bare "TI" — self-ref form is no longer valid.
-        // The checker must reject it (not because it's a forward ref, but because
-        // self-referential truth claims are disallowed).
+        // TI with no cited line — just bare "TI" — is not valid.
         const fakeProof = [
           { type: 'premise', formula: 'P',         justification: 'Pr',   depth: 0 }, // idx 0
           { type: 'step',    formula: 'True(⌜P⌝)', justification: 'TI 1', depth: 0 }, // idx 1
-          { type: 'step',    formula: 'True(⌜3⌝)', justification: 'TI',   depth: 0 }, // idx 2 — self-ref
+          { type: 'step',    formula: 'True(⌜P⌝)', justification: 'TI',   depth: 0 }, // idx 2 — bare TI
         ];
         const r = checkLine(fakeProof, 2);
         return {
           ok: r.ok === false,
-          details: r.ok ? 'self-referential True(⌜3⌝) with bare TI was incorrectly accepted' : ''
+          details: r.ok ? 'bare TI (no citation) was incorrectly accepted' : ''
         };
       }
     }
@@ -4805,10 +4692,10 @@ function triggerAssumptionCertification(idx) {
     return;
   }
   proof[idx]._certifiedByPriorLine = false;
-  const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set(), defrefs: new Set() };
+  const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), defrefs: new Set() };
   satCollectAtoms(node, atoms);
 
-  // If the formula contains linerefs or defrefs, chase them to ground atoms
+  // If the formula contains defrefs, chase them to ground atoms
   // so the certification strip shows the ground propositional variables instead.
   let certAtoms = atoms;
   let certEvalChain = null;
@@ -4816,7 +4703,7 @@ function triggerAssumptionCertification(idx) {
   let certIsTautology = false;
   let certCycleRefs = new Set();
   let certCyclicDefs = new Set();
-  if (atoms.linerefs.size > 0 || (atoms.defrefs && atoms.defrefs.size > 0)) {
+  if (atoms.defrefs && atoms.defrefs.size > 0) {
     const gcd = buildGroundCertData(node, proof);
     certAtoms = gcd.groundAtoms;
     certEvalChain = gcd.evalChain;
@@ -4827,9 +4714,9 @@ function triggerAssumptionCertification(idx) {
   }
 
   const isFOL = certAtoms.predicates.size > 0 || containsQuantifier(node) || certAtoms.freeVars.size > 0;
-  // hasNoVars is only true if there are genuinely no variables AND no unresolved cyclic linerefs/defrefs
+  // hasNoVars is only true if there are genuinely no variables AND no unresolved cyclic defrefs
   const hasNoVars = certAtoms.props.size === 0 && certAtoms.predicates.size === 0 &&
-                    certAtoms.freeVars.size === 0 && certAtoms.linerefs.size === 0
+                    certAtoms.freeVars.size === 0
                     && certCycleRefs.size === 0 && certCyclicDefs.size === 0;
 
   proof[idx].falsifiabilityVerified = false;
@@ -4851,7 +4738,7 @@ function triggerAssumptionCertification(idx) {
 function buildCertifyRow(idx, colSpan) {
   const row = proof[idx];
   const node = parse(row.formula);
-  const atoms = row._certAtoms || { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+  const atoms = row._certAtoms || { props: new Set(), predicates: new Map(), freeVars: new Set() };
   const isFOL = row._certIsFOL || false;
   const cycleRefs = row._certCycleRefs || new Set();
   const cyclicDefs = row._certCyclicDefs || new Set();
@@ -4902,21 +4789,6 @@ function buildCertifyRow(idx, colSpan) {
     fieldsDiv.appendChild(wrap);
   }
 
-  // Cyclic lineref fields: T/F dropdowns for ungrounded self-referential linerefs
-  const cycleRefList = [...cycleRefs].sort((a, b) => a - b);
-  cycleRefList.forEach(lineNum => {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
-    const lbl = document.createElement('label');
-    lbl.style.fontFamily = 'var(--mono)';
-    lbl.textContent = 'Line ' + lineNum + ':';
-    const sel = document.createElement('select');
-    sel.id = 'certify-lineref-' + idx + '-' + lineNum;
-    sel.style.cssText = 'font-size:.85rem;padding:2px 4px';
-    ['T','F'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
-    wrap.appendChild(lbl); wrap.appendChild(sel);
-    fieldsDiv.appendChild(wrap);
-  });
 
   // Cyclic defref fields: T/F dropdowns for ungrounded self-referential defrefs
   const cyclicDefList = [...cyclicDefs].sort();
@@ -4982,7 +4854,7 @@ function buildCertifyRow(idx, colSpan) {
   const resultSpan = document.createElement('span'); resultSpan.className = 'certify-result';
 
   verifyBtn.addEventListener('click', () => {
-    const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+    const model = { props: {}, ext: {}, vars: {}, domain: [] };
 
     if (isFOL) {
       const rawDomain = (document.getElementById('certify-domain-' + idx)?.value || '').trim();
@@ -5024,11 +4896,6 @@ function buildCertifyRow(idx, colSpan) {
 
     if (!node) { resultSpan.textContent = 'Invalid formula.'; resultSpan.className = 'certify-result err'; return; }
 
-    // Populate cyclic linerefs from user's T/F assignments
-    cycleRefList.forEach(lineNum => {
-      const sel = document.getElementById('certify-lineref-' + idx + '-' + lineNum);
-      model.linerefs[lineNum] = sel ? sel.value === 'T' : false;
-    });
 
     // Populate cyclic defrefs from user's T/F assignments
     model.defrefs = {};
@@ -5037,35 +4904,15 @@ function buildCertifyRow(idx, colSpan) {
       model.defrefs[defName] = sel ? sel.value === 'T' : false;
     });
 
-    // Resolve grounded lineref/defref chain
+    // Resolve grounded defref chain
     if (row._certEvalChain) {
       for (const entry of row._certEvalChain) {
-        if (entry.lineNum !== undefined) {
-          model.linerefs[entry.lineNum] = satEval(entry.node, model);
-        } else if (entry.defName !== undefined) {
+        if (entry.defName !== undefined) {
           model.defrefs[entry.defName] = satEval(entry.node, model);
         }
       }
     }
 
-    // Consistency check for cyclic linerefs: the formula on that line must evaluate
-    // to the same truth value the user assigned to it.
-    for (const lineNum of cycleRefList) {
-      const proofIdx = lineNum - 1;
-      if (proofIdx >= 0 && proofIdx < proof.length && proof[proofIdx] && proof[proofIdx].formula) {
-        const lineNode = parse(proof[proofIdx].formula);
-        if (lineNode) {
-          const lineVal = satEval(lineNode, model);
-          if (lineVal !== model.linerefs[lineNum]) {
-            const deemed = model.linerefs[lineNum] ? 'true' : 'false';
-            const implied = model.linerefs[lineNum] ? 'false' : 'true';
-            resultSpan.textContent = '✗ Inconsistent interpretation: deeming line ' + lineNum + ' ' + deemed + ' implies that you also deem line ' + lineNum + ' to be ' + implied + '.';
-            resultSpan.className = 'certify-result err';
-            return;
-          }
-        }
-      }
-    }
 
     // Consistency check for cyclic defrefs: the definition's formula must evaluate
     // to the same truth value the user assigned to the name.
@@ -5123,7 +4970,7 @@ function buildCertifyRow(idx, colSpan) {
 
   // State
   let satNode = null;       // parsed AST of the formula
-  let satAtoms = null;      // { props, predicates, freeVars, linerefs }
+  let satAtoms = null;      // { props, predicates, freeVars }
   let satIsFOL = false;     // does formula contain predicates/quantifiers?
 
   // --- Step 1: parse and display assignment inputs ---
@@ -5154,7 +5001,7 @@ function buildCertifyRow(idx, colSpan) {
     msg.className = 'sat-parse-msg ok';
 
     // Collect atoms
-    satAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), linerefs: new Set() };
+    satAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set() };
     satCollectAtoms(satNode, satAtoms);
 
     satIsFOL = satAtoms.predicates.size > 0
@@ -5165,15 +5012,13 @@ function buildCertifyRow(idx, colSpan) {
     const domainSection = document.getElementById('satDomainSection');
     domainSection.style.display = satIsFOL ? '' : 'none';
 
-    // Propositional variables + linerefs
+    // Propositional variables
     const propSection = document.getElementById('satPropSection');
     const propGrid = document.getElementById('satPropGrid');
     propGrid.innerHTML = '';
     const propItems = [...satAtoms.props].sort();
-    const linerefItems = [...satAtoms.linerefs].sort((a,b)=>a-b);
-    if (propItems.length > 0 || linerefItems.length > 0) {
+    if (propItems.length > 0) {
       propItems.forEach(name => propGrid.appendChild(makeTVRow(name, name)));
-      linerefItems.forEach(n => propGrid.appendChild(makeTVRow('line-' + n, `line ${n}`)));
       propSection.style.display = '';
     } else {
       propSection.style.display = 'none';
@@ -5268,7 +5113,7 @@ function buildCertifyRow(idx, colSpan) {
     if (!satNode || !satAtoms) return;
 
     // Build model
-    const model = { props: {}, ext: {}, vars: {}, linerefs: {}, domain: [] };
+    const model = { props: {}, ext: {}, vars: {}, domain: [] };
 
     // Domain
     if (satIsFOL) {
@@ -5290,11 +5135,6 @@ function buildCertifyRow(idx, colSpan) {
       model.props[name] = sel ? sel.value === 'T' : false;
     });
 
-    // Linerefs
-    satAtoms.linerefs.forEach(n => {
-      const sel = document.getElementById('sat-tv-line-' + n);
-      model.linerefs[n] = sel ? sel.value === 'T' : false;
-    });
 
     // Predicate extensions
     let extError = null;
@@ -5357,10 +5197,7 @@ function buildCertifyRow(idx, colSpan) {
     // Search for tautology/contingent/contradiction
     let verdict = null;
     if (!satIsFOL) {
-      const allKeys = [
-        ...[...satAtoms.props],
-        ...[...satAtoms.linerefs]
-      ];
+      const allKeys = [...satAtoms.props];
       if (allKeys.length <= 14) verdict = satSearchPropositional(satNode, allKeys);
     } else {
       const v = satSearchFOL(satNode, satAtoms, model.domain, model.vars);
