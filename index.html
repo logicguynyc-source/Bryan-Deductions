@@ -822,8 +822,8 @@ header span {
   Bryan Deduction is a Fitch-style natural deduction system extended with a truth predicate. It uses a quotational syntax with no restrictions on formula content. Key differences from standard systems:
   <ul>
     <li>From any accessible formula φ, you can derive <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>. And from any accessible <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>, you can derive φ.</li>
-    <li>Named definitions allow position-independent self-reference: <code>Def L := ¬True(⌜L⌝)</code> defines a Liar sentence. Use <code>True(⌜L⌝)</code> to refer to the named formula in the proof. TI/TE work with defined names the same way they work with quoted formulas.</li>
-    <li>Subderivations can explore what follows from assuming <code>True(⌜NAME⌝)</code> or <code>¬True(⌜NAME⌝)</code> for any defined name — including self-referential ones — as long as the assumption is either previously derived or falsifiable.</li>
+    <li>Variable definitions assign a fixed formula to a variable. For example, <code>Def L := ¬True(⌜L⌝)</code> assigns the formula <code>¬True(⌜L⌝)</code> to the variable L. Wherever L appears in the proof thereafter, it is a shorthand for the formula <code>¬True(⌜L⌝)</code>. <code>⌜L⌝</code> is the name of the formula; TI/TE work with defined names the same way they work with quoted formulas.</li>
+    <li>Subderivations can explore what follows from assuming <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code> or <code>¬True(⌜<span style="font-family:inherit">φ</span>⌝)</code> for any defined variable, as long as this assumption is either (a) previously derived or (b) falsifiable.</li>
   </ul>
   <p class="intro-key">The key innovation: assumptions must be either <em>previously derived</em> (the formula already appears on an accessible prior line) or <em>falsifiable</em> (there exists a coherent assignment of truth values under which the assumption is false). For ordinary formulas, falsifiability just means the formula isn't a tautology. For self-referential formulas like <code>True(⌜L⌝)</code> where <code>Def L := ¬True(⌜L⌝)</code>, it means the assignment of truth values must be internally consistent and must make the assumption false. These constraints are designed to prevent liar sentences, Curry sentences, and similar self-referential tricks from being used to derive a contradiction from the inference rules alone — while still allowing tautologies to be re-assumed once they have been established.</p>
 </div>
@@ -875,10 +875,10 @@ header span {
       </div>
     </div>
 
-    <!-- Named Definitions -->
+    <!-- Variable Definitions -->
     <div class="panel" id="defsPanel" style="margin-bottom:18px;">
       <div class="panel-header" id="defsPanelHeader">
-        <span>Named Definitions</span>
+        <span>Variable Definitions</span>
         <span class="defs-toggle" id="defsToggleIcon">▼</span>
       </div>
       <div class="panel-body" id="defsBody">
@@ -890,8 +890,7 @@ header span {
         </div>
         <div id="defsValidationMsg" style="display:none;margin-top:6px;font-size:.82rem;color:#9b1c1c;"></div>
         <div class="def-note">
-          Define named formulas for G&ouml;delian self-reference. Example: <code>Def L := ¬True(⌜L⌝)</code><br>
-          Use <code>True(⌜NAME⌝)</code> in the proof to reference a defined name. Names: 1–5 uppercase letters.
+          Here, you can assign a fixed formula to any variable that you'd like to fix. Example: <code>Def L := ¬True(⌜L⌝)</code>
         </div>
       </div>
     </div>
@@ -998,8 +997,8 @@ header span {
         <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
         <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
         <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
-        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> (quoted formula) or <code>True(⌜NAME⌝)</code> (defined name) to assert truth. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝) or True(⌜NAME⌝). <strong>TE m</strong>: from a True(⌜…⌝) form on line m, derive the referenced formula. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
-        <p style="margin-top:6px;"><strong>Named definitions</strong> — Use the <em>Named Definitions</em> panel to define named formulas (e.g. <code>Def L := ¬True(⌜L⌝)</code>). Self-referential definitions are allowed. Use <code>True(⌜NAME⌝)</code> in your proof; TI/TE will match against the defined formula.</p>
+        <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> to assert that φ is true. Here, φ can be a spelled-out formula or a defined variable. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝). <strong>TE m</strong>: from True(⌜φ⌝) on line m, derive φ. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
+        <p style="margin-top:6px;"><strong>Variable definitions</strong> — Use the <em>Variable Definitions</em> panel to assign a fixed formula to a variable (e.g. <code>Def L := ¬True(⌜L⌝)</code>). The defined variable then stands for that formula wherever it appears. Definitions may reference their own variable inside corner quotes, but not as a bare formula-level occurrence.</p>
       </div>
     </div>
 
@@ -1020,7 +1019,7 @@ header span {
               <li>Any single lowercase letter (<code>a</code>–<code>z</code>) standing alone &mdash; a propositional variable</li>
               <li>An uppercase letter followed by one or more lowercase term letters (e.g. <code>Fx</code>, <code>Gxy</code>) &mdash; a predicate application. (<code>Ax</code> and <code>Ex</code> are reserved for quantifier shorthands and are not WFFs.)</li>
               <li><code>t<sub>1</sub> = t<sub>2</sub></code> where t<sub>1</sub> and t<sub>2</sub> are lowercase term letters &mdash; an identity statement</li>
-              <li><code>True(⌜NAME⌝)</code> where NAME is a defined formula name &mdash; the truth predicate applied to a named definition</li>
+              <li><code>True(⌜φ⌝)</code> where φ is a defined variable &mdash; the truth predicate applied to a variable definition</li>
 
             </ol>
             <strong>Recursive cases</strong> — if φ and ψ are WFFs and x is a variable, then so are:
@@ -1280,8 +1279,10 @@ const RULES = [
   { key: '∃E',  name: 'Existential Elim',       abbr: '∃E',  form: '∃x φx (m), [φc⊢ψ] (i–j) → ψ',            desc: 'From ∃x φ and a subproof from φ[c] to ψ (c not free in ψ or any undischarged assumption), derive ψ. Write as: ∃E m i–j.', lines: 3, isFOL: true },
   { key: '=E',  name: 'Identity Elim',          abbr: '=E',  form: 'a=b (m), φ[a] (n) → φ[b]',                desc: 'Substitute identicals: from a=b and φ[a], derive φ[b].', lines: 2, isFOL: true },
   // ── Truth Theory ──
-  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)  or  True(⌜NAME⌝)',   desc: 'Two forms. (1) Spell out the formula: from φ on line m, derive True(⌜φ⌝). Write: TI m. (2) Use a defined name: if Def NAME := φ, from φ on line m, derive True(⌜NAME⌝). Write: TI m.', lines: 1, isTruth: true },
-  { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ  or  True(⌜NAME⌝) (m) → definition formula', desc: 'Two forms. (1) Formula-quote: from True(⌜φ⌝) on line m, derive φ. Write: TE m. (2) Defined name: from True(⌜NAME⌝) on line m (where Def NAME := φ), derive φ. Write: TE m.', lines: 1, isTruth: true },
+  { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)',   desc: 'From φ on line m, derive True(⌜φ⌝). φ can be a spelled-out formula or a defined variable. Write: TI m.', lines: 1, isTruth: true },
+  { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ', desc: 'From True(⌜φ⌝) on line m, derive φ. φ can be a spelled-out formula or a defined variable. Write: TE m.', lines: 1, isTruth: true },
+  // ── Definitions ──
+  { key: 'Def', name: 'Definition',              abbr: 'Def', form: 'φ (m) → ψ, where φ and ψ are equal by definition', desc: 'If line m contains a defined variable φ, derive its definiens (the formula assigned to φ). Conversely, if line m contains the definiens, derive φ. In both directions, this simply unpacks or repacks a variable definition. Write: Def m.', lines: 1, isDef: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -1460,8 +1461,8 @@ function parseTerm(s) {
     }
     if (end === s.length - 1) {
       const innerStr = s.slice(1, end).trim();
-      // ⌜NAME⌝ where NAME is a defined formula name — a definition reference
-      if (/^[A-Z][A-Z0-9]{0,4}$/.test(innerStr) && namedDefinitions.some(d => d.name === innerStr)) {
+      // ⌜φ⌝ where φ is a defined variable — a definition reference
+      if (/^[A-Za-z]$/.test(innerStr) && namedDefinitions.some(d => d.name === innerStr)) {
         return { type: 'defref', name: innerStr };
       }
       // ⌜φ⌝ — a quasi-quoted formula
@@ -1498,6 +1499,24 @@ function isFreeInTerm(v, term) {
   if (term.type === 'defref') return false;  // defined names contain no free variables
   return false;
 }
+
+// Check whether a formula string contains a bare (non-quoted) occurrence of a name.
+// Used to block definitions like Def L := L ∧ P (infinite expansion).
+function formulaContainsBareAtom(formulaStr, name) {
+  const node = parseFOL(formulaStr);
+  if (!node) return false;
+  return (function walk(n) {
+    if (!n) return false;
+    if (n.type === 'atom' && n.formula === name) return true;
+    if (n.type === 'neg') return walk(n.sub);
+    if (n.type === 'true') return false; // inside True(...) the name is a term, not a bare atom
+    if (['∧','∨','→','↔'].includes(n.type)) return walk(n.left) || walk(n.right);
+    if (n.type === '∀' || n.type === '∃') return walk(n.scope);
+    return false;
+  })(node);
+}
+
+const _expandingDefs = new Set(); // guards against infinite expansion of mutual bare refs
 
 // Full FOL parser: handles ∀/∃, connectives, atoms, identity, TFL
 function parseFOL(f) {
@@ -1546,14 +1565,38 @@ function parseFOL(f) {
   // FOL atom: uppercase predicate letter(s) + zero or more lowercase term letters
   // Predicate must be uppercase; terms are lowercase a-z
   // Per spec: predicates are single uppercase other than A/E alone (those are quantifier shorthands)
-  if (/^[A-Z][a-z]*$/.test(f)) return { type: 'atom', formula: f };
+  if (/^[A-Z][a-z]*$/.test(f)) {
+    // If this is a single uppercase letter matching a defined name, expand it
+    if (f.length === 1 && defsSubmitted) {
+      const defn = namedDefinitions.find(d => d.name === f);
+      if (defn && !_expandingDefs.has(f)) {
+        _expandingDefs.add(f);
+        const expanded = parseFOL(normalizeFormula(defn.formula));
+        _expandingDefs.delete(f);
+        if (expanded) return expanded;
+      }
+    }
+    return { type: 'atom', formula: f };
+  }
 
   // Sentential variable: single lowercase letter standing alone.
   // The same letter may appear as a bound variable inside a quantifier scope, but
   // when it fills a formula position on its own it is treated as a propositional atom.
   // substNode and isFreeInNode are safe: their atom regex requires an uppercase prefix
   // so they leave standalone lowercase atoms untouched.
-  if (/^[a-z]$/.test(f)) return { type: 'atom', formula: f };
+  if (/^[a-z]$/.test(f)) {
+    // If this letter matches a defined name, expand it
+    if (defsSubmitted) {
+      const defn = namedDefinitions.find(d => d.name === f);
+      if (defn && !_expandingDefs.has(f)) {
+        _expandingDefs.add(f);
+        const expanded = parseFOL(normalizeFormula(defn.formula));
+        _expandingDefs.delete(f);
+        if (expanded) return expanded;
+      }
+    }
+    return { type: 'atom', formula: f };
+  }
 
   // Nothing else is a WFF.
   return null;
@@ -2295,6 +2338,14 @@ function checkLine(proof, idx) {
       return { ok: true };
     }
 
+    case 'DEF': {
+      if (lines.length < 1) return { ok: false, msg: 'Def needs 1 line reference (e.g. Def 3)' };
+      const defRefF = normalizeFormula(L(lines[0]) || '');
+      const defRefP = P(lines[0]);
+      if (!formulasEqual(p ?? f, defRefP ?? defRefF)) return { ok: false, msg: `Definition does not match: line ${lines[0]+1} is "${defRefF}", current line is "${f}"` };
+      return { ok: true };
+    }
+
     // ══ UNIVERSAL QUANTIFIER ══
 
     case '∀I': case 'UI': case 'FORALL-I': {
@@ -2504,7 +2555,7 @@ function checkLine(proof, idx) {
         return { ok: true };
       }
 
-      return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝ or a defined name ⌜NAME⌝' };
+      return { ok: false, msg: 'TI: argument must be a quoted formula ⌜φ⌝ or a defined variable' };
     }
 
     case 'TE': case 'TRUE-E': {
@@ -2537,7 +2588,7 @@ function checkLine(proof, idx) {
         return { ok: true };
       }
 
-      return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝ or a defined name ⌜NAME⌝' };
+      return { ok: false, msg: 'TE: argument must be a quoted formula ⌜φ⌝ or a defined variable' };
     }
 
     default:
@@ -2955,7 +3006,7 @@ document.getElementById('symBar').addEventListener('click', e => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// NAMED DEFINITIONS PANEL
+// VARIABLE DEFINITIONS PANEL
 // ═══════════════════════════════════════════════════════════════
 (function () {
   let defsOpen = true;
@@ -3028,8 +3079,8 @@ document.getElementById('symBar').addEventListener('click', e => {
       nameInp.value = def.name;
       nameInp.placeholder = 'NAME';
       nameInp.addEventListener('change', e => {
-        const val = e.target.value.trim().toUpperCase();
-        if (val && /^[A-Z][A-Z0-9]{0,4}$/.test(val)) {
+        const val = e.target.value.trim();
+        if (val && /^[A-Za-z]$/.test(val)) {
           namedDefinitions[i].name = val;
           e.target.value = val;
           invalidateAssumptionCerts();
@@ -3094,6 +3145,11 @@ document.getElementById('symBar').addEventListener('click', e => {
       statusEl.className = 'def-status err';
       return;
     }
+    if (def.name && formulaContainsBareAtom(normalizeFormula(def.formula), def.name)) {
+      statusEl.textContent = 'Name cannot appear bare in its own definition (use corner quotes).';
+      statusEl.className = 'def-status err';
+      return;
+    }
     // Check for duplicate names
     const dupes = namedDefinitions.filter(d => d.name === def.name);
     if (dupes.length > 1) {
@@ -3143,13 +3199,34 @@ document.getElementById('symBar').addEventListener('click', e => {
     const names = new Set();
     filtered.forEach((def, i) => {
       if (!def.name) { errors.push(`Definition ${i+1}: missing name.`); return; }
-      if (!/^[A-Z][A-Z0-9]{0,4}$/.test(def.name)) { errors.push(`"${def.name}": invalid name (use 1–5 uppercase letters).`); return; }
+      if (!/^[A-Za-z]$/.test(def.name)) { errors.push(`"${def.name}": invalid name (use a single letter).`); return; }
       if (names.has(def.name)) { errors.push(`"${def.name}": duplicate name.`); return; }
       names.add(def.name);
       if (!def.formula) { errors.push(`${def.name}: missing formula.`); return; }
       const node = parse(def.formula);
       if (!node) { errors.push(`${def.name}: not a well-formed formula.`); return; }
+      if (formulaContainsBareAtom(normalizeFormula(def.formula), def.name)) { errors.push(`${def.name}: the defined name cannot appear as a bare formula-level occurrence in its own definition (use corner quotes for self-reference).`); return; }
     });
+    // Check for mutual bare references (e.g. Def A := B, Def B := A → infinite expansion)
+    if (errors.length === 0) {
+      const defMap = Object.fromEntries(filtered.map(d => [d.name, d]));
+      for (const def of filtered) {
+        const visited = new Set();
+        let cur = def.name;
+        while (cur) {
+          visited.add(cur);
+          const curDef = defMap[cur];
+          if (!curDef) break;
+          const bareRef = filtered.find(other => other.name !== curDef.name && formulaContainsBareAtom(normalizeFormula(curDef.formula), other.name));
+          if (!bareRef) break;
+          if (visited.has(bareRef.name)) {
+            errors.push(`${def.name}: mutual bare references with ${bareRef.name} would cause infinite expansion.`);
+            break;
+          }
+          cur = bareRef.name;
+        }
+      }
+    }
     if (errors.length > 0) {
       msgEl.innerHTML = errors.map(e => '• ' + e).join('<br>');
       msgEl.style.display = '';
@@ -3197,8 +3274,9 @@ const rulesList = document.getElementById('rulesList');
 let tflHeaderAdded = false;
 let folHeaderAdded = false;
 let truthHeaderAdded = false;
+let defHeaderAdded = false;
 RULES.forEach(rule => {
-  if (!rule.isFOL && !rule.isTruth && !tflHeaderAdded) {
+  if (!rule.isFOL && !rule.isTruth && !rule.isDef && !tflHeaderAdded) {
     const divider2 = document.createElement('div');
     divider2.className = 'rule-section-divider rule-section-divider-tfl';
     divider2.textContent = 'Truth-Functional Logic';
@@ -3220,6 +3298,14 @@ RULES.forEach(rule => {
     divider3.textContent = 'Truth Theory';
     rulesList.appendChild(divider3);
     truthHeaderAdded = true;
+  }
+  // Insert section divider before Definition rules
+  if (rule.isDef && !defHeaderAdded) {
+    const divider4 = document.createElement('div');
+    divider4.className = 'rule-section-divider';
+    divider4.textContent = 'Variable Definitions';
+    rulesList.appendChild(divider4);
+    defHeaderAdded = true;
   }
   const item = document.createElement('div');
   item.className = 'rule-item';
@@ -4483,8 +4569,9 @@ function runDevSelfTests() {
     }
   });
 
-  // ─── Named Definition Tests ─────────────────────────────────
+  // ─── Variable Definition Tests ─────────────────────────────────
   const savedDefs = JSON.parse(JSON.stringify(namedDefinitions));
+  const savedDefsSubmitted = defsSubmitted;
 
   // Test: TI with defref — from the definition formula, derive True(⌜NAME⌝)
   {
@@ -4612,9 +4699,112 @@ function runDevSelfTests() {
     });
   }
 
+  // Test: Parser expansion — defined name expands to definition formula
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'A', formula: 'P ∨ Q' });
+    const savedSubmitted = defsSubmitted;
+    defsSubmitted = true;
+    try {
+      const nodeA = parse('A');
+      const nodePQ = parse('P ∨ Q');
+      const ok = nodeA && nodePQ && formulasEqual(nodeA, nodePQ);
+      tests.push({ name: 'Def #11 (expansion): A expands to P∨Q when Def A := P∨Q', ok: !!ok, details: ok ? '' : 'A parsed as: ' + JSON.stringify(nodeA) });
+    } finally { defsSubmitted = savedSubmitted; }
+  }
+
+  // Test: formulasEqual with expansion
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'A', formula: 'P ∨ Q' });
+    const savedSubmitted = defsSubmitted;
+    defsSubmitted = true;
+    try {
+      const ok = formulasEqual('A', 'P ∨ Q');
+      tests.push({ name: 'Def #12 (formulasEqual expansion): A equals P∨Q', ok: !!ok, details: ok ? '' : 'formulasEqual returned false' });
+    } finally { defsSubmitted = savedSubmitted; }
+  }
+
+  // Test: bare self-reference detection
+  {
+    namedDefinitions.length = 0;
+    const bare = formulaContainsBareAtom('L ∧ P', 'L');
+    const notBare = formulaContainsBareAtom('True(⌜L⌝)', 'L');
+    const notBare2 = formulaContainsBareAtom('¬True(⌜L⌝)', 'L');
+    tests.push({ name: 'Def #13 (bare self-ref): L∧P contains bare L', ok: bare === true, details: bare ? '' : 'not detected' });
+    tests.push({ name: 'Def #14 (bare self-ref): True(⌜L⌝) does NOT contain bare L', ok: notBare === false, details: notBare ? 'false positive' : '' });
+    tests.push({ name: 'Def #15 (bare self-ref): ¬True(⌜L⌝) does NOT contain bare L', ok: notBare2 === false, details: notBare2 ? 'false positive' : '' });
+  }
+
+  // Test: TI works with expanded name — user writes defined name as formula, then TI
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'A', formula: 'P ∨ Q' });
+    const savedSubmitted = defsSubmitted;
+    defsSubmitted = true;
+    try {
+      const fakeProof = [
+        { type: 'premise', formula: 'A',          justification: 'Pr',   depth: 0 },
+        { type: 'step',    formula: 'True(⌜A⌝)',  justification: 'TI 1', depth: 0 },
+      ];
+      const r = checkLine(fakeProof, 1);
+      tests.push({ name: 'Def #16 (TI with expanded name): True(⌜A⌝) from A where Def A := P∨Q', ok: r.ok === true, details: r.ok ? '' : r.msg });
+    } finally { defsSubmitted = savedSubmitted; }
+  }
+
+  // Test: TE yields expanded formula, user writes defined name
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'A', formula: 'P ∨ Q' });
+    const savedSubmitted = defsSubmitted;
+    defsSubmitted = true;
+    try {
+      const fakeProof = [
+        { type: 'premise', formula: 'True(⌜A⌝)', justification: 'Pr',   depth: 0 },
+        { type: 'step',    formula: 'A',           justification: 'TE 1', depth: 0 },
+      ];
+      const r = checkLine(fakeProof, 1);
+      tests.push({ name: 'Def #17 (TE to expanded name): A from True(⌜A⌝) where Def A := P∨Q', ok: r.ok === true, details: r.ok ? '' : r.msg });
+    } finally { defsSubmitted = savedSubmitted; }
+  }
+
+  // ── Def rule tests ──
+  {
+    const savedSubmitted = defsSubmitted;
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'A', formula: 'P∨Q' });
+    defsSubmitted = true;
+    try {
+      // Def unfold: A on line 1, derive P∨Q via Def 1
+      const proof1 = [
+        { type: 'premise', formula: 'A',   justification: 'Pr',    depth: 0 },
+        { type: 'step',    formula: 'P∨Q', justification: 'Def 1', depth: 0 },
+      ];
+      const r1 = checkLine(proof1, 1);
+      tests.push({ name: 'Def #18 (Def unfold): P∨Q from A where Def A := P∨Q', ok: r1.ok === true, details: r1.ok ? '' : r1.msg });
+
+      // Def fold: P∨Q on line 1, derive A via Def 1
+      const proof2 = [
+        { type: 'premise', formula: 'P∨Q', justification: 'Pr',    depth: 0 },
+        { type: 'step',    formula: 'A',   justification: 'Def 1', depth: 0 },
+      ];
+      const r2 = checkLine(proof2, 1);
+      tests.push({ name: 'Def #19 (Def fold): A from P∨Q where Def A := P∨Q', ok: r2.ok === true, details: r2.ok ? '' : r2.msg });
+
+      // Def mismatch: should fail when formulas don't match by definition
+      const proof3 = [
+        { type: 'premise', formula: 'A',   justification: 'Pr',    depth: 0 },
+        { type: 'step',    formula: 'P∧Q', justification: 'Def 1', depth: 0 },
+      ];
+      const r3 = checkLine(proof3, 1);
+      tests.push({ name: 'Def #20 (Def mismatch): P∧Q should not follow from A where Def A := P∨Q', ok: r3.ok === false, details: r3.ok ? 'checker incorrectly accepted' : '' });
+    } finally { defsSubmitted = savedSubmitted; }
+  }
+
   // Restore definitions
   namedDefinitions.length = 0;
   savedDefs.forEach(d => namedDefinitions.push(d));
+  defsSubmitted = savedDefsSubmitted;
 
   const failed = tests.filter(t => !t.ok);
   if (failed.length) {
