@@ -848,6 +848,26 @@ header span {
   <!-- LEFT: PROOF AREA -->
   <div>
 
+    <!-- Variable Definitions -->
+    <div class="panel" id="defsPanel" style="margin-bottom:18px;">
+      <div class="panel-header" id="defsPanelHeader">
+        <span>Variable Definitions</span>
+        <span class="defs-toggle" id="defsToggleIcon">▼</span>
+      </div>
+      <div class="panel-body" id="defsBody">
+        <div id="defsList"></div>
+        <button class="def-add-btn" id="addDefBtn">+ Add Definition</button>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;">
+          <button class="def-submit-btn" id="submitDefsBtn">Submit Defined Terms</button>
+          <button class="def-edit-btn" id="editDefsBtn" style="display:none;">Edit Definitions</button>
+        </div>
+        <div id="defsValidationMsg" style="display:none;margin-top:6px;font-size:.82rem;color:#9b1c1c;"></div>
+        <div class="def-note">
+          Here, you can assign a fixed formula to any variable that you'd like to fix. Example: <code>Def L := ¬True(⌜L⌝)</code>
+        </div>
+      </div>
+    </div>
+
     <!-- Setup -->
     <div class="panel" style="margin-bottom:18px;" id="setupPanel">
       <div class="panel-header">
@@ -871,26 +891,6 @@ header span {
             <strong>Warning:</strong> this conclusion is not derivable from these premises.
             <button onclick="document.getElementById('derivabilityWarning').style.display='none'" style="margin-left:10px;font-size:.78rem;padding:1px 7px;cursor:pointer;">Dismiss</button>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Variable Definitions -->
-    <div class="panel" id="defsPanel" style="margin-bottom:18px;">
-      <div class="panel-header" id="defsPanelHeader">
-        <span>Variable Definitions</span>
-        <span class="defs-toggle" id="defsToggleIcon">▼</span>
-      </div>
-      <div class="panel-body" id="defsBody">
-        <div id="defsList"></div>
-        <button class="def-add-btn" id="addDefBtn">+ Add Definition</button>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;">
-          <button class="def-submit-btn" id="submitDefsBtn">Submit Defined Terms</button>
-          <button class="def-edit-btn" id="editDefsBtn" style="display:none;">Edit Definitions</button>
-        </div>
-        <div id="defsValidationMsg" style="display:none;margin-top:6px;font-size:.82rem;color:#9b1c1c;"></div>
-        <div class="def-note">
-          Here, you can assign a fixed formula to any variable that you'd like to fix. Example: <code>Def L := ¬True(⌜L⌝)</code>
         </div>
       </div>
     </div>
@@ -974,6 +974,21 @@ header span {
       </div>
     </div>
 
+    <!-- SYMBOL BAR (proof area) -->
+    <div class="sym-bar" id="symBar2">
+      <button class="sym-btn" data-sym="¬" title="Negation">¬</button>
+      <button class="sym-btn" data-sym="∧" title="Conjunction">∧</button>
+      <button class="sym-btn" data-sym="∨" title="Disjunction">∨</button>
+      <button class="sym-btn" data-sym="→" title="Conditional">→</button>
+      <button class="sym-btn" data-sym="↔" title="Biconditional">↔</button>
+      <button class="sym-btn" data-sym="∀" title="Universal">∀</button>
+      <button class="sym-btn" data-sym="∃" title="Existential">∃</button>
+      <button class="sym-btn" data-sym="⊥" title="Contradiction">⊥</button>
+      <span style="width:1px;background:var(--border-dark);margin:4px 8px;align-self:stretch;display:inline-block;"></span>
+      <button class="sym-btn" data-sym="⌜" title="Left corner quote (open quasi-quotation)">⌜</button>
+      <button class="sym-btn" data-sym="⌝" title="Right corner quote (close quasi-quotation)">⌝</button>
+    </div>
+
   </div>
 
   <!-- RIGHT: RULES + INSTRUCTIONS -->
@@ -989,16 +1004,16 @@ header span {
     <div class="panel">
       <div class="panel-header"><span>How to Use</span></div>
       <div class="instructions">
-        <p style="margin-bottom:8px;"><strong>1. Set up</strong> — Enter comma-separated premises and a conclusion, then click <em>Create Proof</em>.</p>
-        <p style="margin-bottom:8px;"><strong>2. Type formulas</strong> — Each row has a formula cell (left) and a justification cell (right). Click either to edit.</p>
-        <p style="margin-bottom:8px;"><strong>3. Justifications</strong> — Type the rule abbreviation and line numbers, e.g. <code>∧I 1,2</code> or <code>→E 3,4</code>. Premises are labelled automatically.</p>
-        <p style="margin-bottom:8px;"><strong>4. Subproofs</strong> — Use <strong>+sub</strong> to open a subproof (needed for →I, ¬I, ∨E, ∀I, ∃E). The first line is always an assumption.</p>
-        <p style="margin-bottom:8px;"><strong>5. FOL quantifiers</strong> — Write <code>∀x Fx</code> or <code>∃x Gxy</code>. For <code>∀E</code> and <code>∃I</code> specify the substitution: <code>∀E 1 [x/a]</code> (replace x with a). For <code>∀I</code> write <code>∀I 3-5 [c/x]</code> (c is the arbitrary constant, x the variable). For <code>∃E</code> write <code>∃E 1 2-4</code>. <strong>Scope convention:</strong> binary connectives (→, ∨, ∧, ↔) always bind more tightly than quantifier scope extension. So <code>∃x Dx→Q</code> means <code>(∃x Dx)→Q</code>. Write <code>∃x(Dx→Q)</code> to bind → inside the quantifier.</p>
-        <p style="margin-bottom:8px;"><strong>6. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
+        <p style="margin-bottom:8px;"><strong>1. Variable definitions (optional)</strong> — Use the <em>Variable Definitions</em> panel to assign a fixed formula to a variable (e.g. <code>Def L := ¬True(⌜L⌝)</code>). Submit definitions before setting up your problem. If you don't need definitions, skip this step.</p>
+        <p style="margin-bottom:8px;"><strong>2. Set up</strong> — Enter comma-separated premises and a conclusion, then click <em>Create Proof</em>.</p>
+        <p style="margin-bottom:8px;"><strong>3. Type formulas</strong> — Each row has a formula cell (left) and a justification cell (right). Click either to edit.</p>
+        <p style="margin-bottom:8px;"><strong>4. Justifications</strong> — Type the rule abbreviation and line numbers, e.g. <code>∧I 1,2</code> or <code>→E 3,4</code>. Premises are labelled automatically.</p>
+        <p style="margin-bottom:8px;"><strong>5. Subproofs</strong> — Use <strong>+sub</strong> to open a subproof (needed for →I, ¬I, ∨E, ∀I, ∃E). The first line is always an assumption.</p>
+        <p style="margin-bottom:8px;"><strong>6. FOL quantifiers</strong> — Write <code>∀x Fx</code> or <code>∃x Gxy</code>. For <code>∀E</code> and <code>∃I</code> specify the substitution: <code>∀E 1 [x/a]</code> (replace x with a). For <code>∀I</code> write <code>∀I 3-5 [c/x]</code> (c is the arbitrary constant, x the variable). For <code>∃E</code> write <code>∃E 1 2-4</code>. <strong>Scope convention:</strong> binary connectives (→, ∨, ∧, ↔) always bind more tightly than quantifier scope extension. So <code>∃x Dx→Q</code> means <code>(∃x Dx)→Q</code>. Write <code>∃x(Dx→Q)</code> to bind → inside the quantifier.</p>
+        <p style="margin-bottom:8px;"><strong>7. Check</strong> — Click <em>Check Proof</em> to validate. Each line turns green (valid) or red (error).</p>
         <p><strong>TFL shortcuts</strong> — <code>-</code> or <code>~</code> for ¬, <code>/\</code> for ∧, <code>\/</code> for ∨, <code>-&gt;</code> for →, <code>&lt;-&gt;</code> for ↔, <code>_|_</code> for ⊥.</p>
         <p style="margin-top:6px;"><strong>FOL shortcuts</strong> — See the <em>FOL Syntax</em> panel for formula syntax and substitution notation.</p>
         <p style="margin-top:6px;"><strong>Truth predicate</strong> — Write <code>True(⌜φ⌝)</code> to assert that φ is true. Here, φ can be a spelled-out formula or a defined variable. <strong>TI m</strong>: from φ on line m, derive True(⌜φ⌝). <strong>TE m</strong>: from True(⌜φ⌝) on line m, derive φ. Click ⌜ ⌝ in the symbol bar to insert corner quotes.</p>
-        <p style="margin-top:6px;"><strong>Variable definitions</strong> — Use the <em>Variable Definitions</em> panel to assign a fixed formula to a variable (e.g. <code>Def L := ¬True(⌜L⌝)</code>). The defined variable then stands for that formula wherever it appears. Definitions may reference their own variable inside corner quotes, but not as a bare formula-level occurrence.</p>
       </div>
     </div>
 
@@ -1019,11 +1034,9 @@ header span {
               <li>Any single lowercase letter (<code>a</code>–<code>z</code>) standing alone &mdash; a propositional variable</li>
               <li>An uppercase letter followed by one or more lowercase term letters (e.g. <code>Fx</code>, <code>Gxy</code>) &mdash; a predicate application. (<code>Ax</code> and <code>Ex</code> are reserved for quantifier shorthands and are not WFFs.)</li>
               <li><code>t<sub>1</sub> = t<sub>2</sub></code> where t<sub>1</sub> and t<sub>2</sub> are lowercase term letters &mdash; an identity statement</li>
-              <li><code>True(⌜φ⌝)</code> where φ is a defined variable &mdash; the truth predicate applied to a variable definition</li>
-
             </ol>
             <strong>Recursive cases</strong> — if φ and ψ are WFFs and x is a variable, then so are:
-            <ol style="margin:.4em 0 .6em 1.4em; padding:0" start="7">
+            <ol style="margin:.4em 0 .6em 1.4em; padding:0" start="6">
               <li><code>True(⌜φ⌝)</code> &mdash; the truth predicate applied to a quasi-quoted WFF</li>
               <li><code>¬φ</code></li>
               <li><code>(φ ∧ ψ)</code>, <code>(φ ∨ ψ)</code>, <code>(φ → ψ)</code>, <code>(φ ↔ ψ)</code></li>
@@ -1258,6 +1271,8 @@ function preprocessInput(s) {
 // RULES REFERENCE
 // ═══════════════════════════════════════════════════════════════
 const RULES = [
+  // ── Structural ──
+  { key: 'As',  name: 'Assumption',             abbr: 'As',  form: 'φ',                                        desc: 'To open a subderivation, the assumption φ must be either (a) already derived on an accessible prior line, or (b) falsifiable — there must exist a coherent assignment of truth values under which φ is false. This is a constraint on introducing subderivations, not on the inference rules that discharge them; the inference rules (→I, ¬I, IP, ∨E, ∃E) are standard classical rules.', lines: 0, isStructural: true },
   // ── Truth-Functional Logic ──
   { key: '∧I',  name: 'Conjunction Intro',      abbr: '∧I',  form: 'φ (m), ψ (n) → φ∧ψ',                     desc: 'From φ on line m and ψ on line n, derive φ ∧ ψ.',                           lines: 2 },
   { key: '∧E',  name: 'Conjunction Elim',       abbr: '∧E',  form: 'φ∧ψ (m) → φ or ψ',                       desc: 'From φ ∧ ψ on line m, derive either φ or ψ.',                              lines: 1 },
@@ -1686,10 +1701,27 @@ function evaluatePropositionalFormula(formula, env) {
 // SATISFIABILITY CHECKER ENGINE
 // ═══════════════════════════════════════════════════════════════
 
-// Collect all atomic propositions (TFL vars), FOL predicates, free variables,
-// and defrefs in a formula node.
+// Check if a formula AST contains ⊥ anywhere.
+function containsBot(node) {
+  if (!node) return false;
+  if (node.type === 'bot') return true;
+  switch (node.type) {
+    case 'neg': return containsBot(node.sub);
+    case '∧': case '∨': case '→': case '↔':
+      return containsBot(node.left) || containsBot(node.right);
+    case '∀': case '∃': return containsBot(node.scope);
+    case 'true':
+      if (node.arg.type === 'quote') return containsBot(node.arg.inner);
+      return false;
+    default: return false;
+  }
+}
+
+// Collect all atomic propositions (TFL vars), FOL predicates, and free variables
+// in a formula node. For True(⌜NAME⌝), expands the definition and collects from it.
+const _satCollecting = new Set(); // cycle guard for defref expansion
 function satCollectAtoms(node, out) {
-  // out = { props: Set<string>, predicates: Map<name, arity>, freeVars: Set<string> }
+  // out = { props: Set<string>, predicates: Map<name, arity>, freeVars: Set<string>, hasCycle?: bool }
   if (!node) return;
   switch (node.type) {
     case 'bot': break;
@@ -1727,8 +1759,21 @@ function satCollectAtoms(node, out) {
       break;
     case 'true':
       if (node.arg.type === 'defref') {
-        out.defrefs = out.defrefs || new Set();
-        out.defrefs.add(node.arg.name);
+        // True(⌜NAME⌝): expand the definition and collect atoms from it
+        const _dn2 = node.arg.name;
+        if (!_satCollecting.has(_dn2)) {
+          _satCollecting.add(_dn2);
+          const _defColl = namedDefinitions.find(d => d.name === _dn2);
+          if (_defColl && _defColl.formula) {
+            const _defNode = parse(_defColl.formula);
+            if (_defNode) satCollectAtoms(_defNode, out);
+          }
+          _satCollecting.delete(_dn2);
+        } else {
+          out.hasCycle = true; // self-referential definition detected
+          if (!out.cyclicDefs) out.cyclicDefs = new Set();
+          out.cyclicDefs.add(_dn2);
+        }
       } else if (node.arg.type === 'quote') {
         // True(⌜φ⌝): recurse into quoted formula to collect its atoms
         satCollectAtoms(node.arg.inner, out);
@@ -1745,6 +1790,7 @@ function satCollectAtoms(node, out) {
 //   vars:     { [varName]: string } — current variable binding
 //   domain:   string[]              — universe of discourse
 // }
+const _satEvalExpanding = new Set(); // cycle guard for defref expansion in satEval
 function satEval(node, model) {
   if (!node) return null;
   switch (node.type) {
@@ -1767,28 +1813,49 @@ function satEval(node, model) {
       const r = model.vars[node.right] !== undefined ? model.vars[node.right] : node.right;
       return l === r;
     }
-    case 'neg':  return !satEval(node.sub, model);
-    case '∧':   return satEval(node.left, model) && satEval(node.right, model);
-    case '∨':   return satEval(node.left, model) || satEval(node.right, model);
-    case '→':   return !satEval(node.left, model) || satEval(node.right, model);
-    case '↔':   return satEval(node.left, model) === satEval(node.right, model);
+    case 'neg': { const _s = satEval(node.sub, model); return _s === null ? null : !_s; }
+    case '∧': { const _l = satEval(node.left, model); if (_l === null) return null; const _r = satEval(node.right, model); return _r === null ? null : _l && _r; }
+    case '∨': { const _l = satEval(node.left, model); if (_l === null) return null; const _r = satEval(node.right, model); return _r === null ? null : _l || _r; }
+    case '→': { const _l = satEval(node.left, model); if (_l === null) return null; const _r = satEval(node.right, model); return _r === null ? null : !_l || _r; }
+    case '↔': { const _l = satEval(node.left, model); if (_l === null) return null; const _r = satEval(node.right, model); return _r === null ? null : _l === _r; }
     case '∀': {
       const v = node.variable;
-      return model.domain.every(d => {
+      for (const d of model.domain) {
         const m2 = { ...model, vars: { ...model.vars, [v]: d } };
-        return satEval(node.scope, m2);
-      });
+        const _r = satEval(node.scope, m2);
+        if (_r === null) return null;
+        if (!_r) return false;
+      }
+      return true;
     }
     case '∃': {
       const v = node.variable;
-      return model.domain.some(d => {
+      for (const d of model.domain) {
         const m2 = { ...model, vars: { ...model.vars, [v]: d } };
-        return satEval(node.scope, m2);
-      });
+        const _r = satEval(node.scope, m2);
+        if (_r === null) return null;
+        if (_r) return true;
+      }
+      return false;
     }
     case 'true': {
       if (node.arg.type === 'defref') {
-        return !!model.defrefs?.[node.arg.name];
+        // True(⌜NAME⌝): expand the definition and evaluate via T-schema
+        const _dn = node.arg.name;
+        // If a fixed value was provided for this defref (interactive cert mode), use it
+        if (model.defValues && _dn in model.defValues) return model.defValues[_dn];
+        if (_satEvalExpanding.has(_dn)) return null; // cycle detected (e.g. Liar)
+        const _defEv = namedDefinitions.find(d => d.name === _dn);
+        if (_defEv && _defEv.formula) {
+          const _defNodeEv = parse(_defEv.formula);
+          if (_defNodeEv) {
+            _satEvalExpanding.add(_dn);
+            const _val = satEval(_defNodeEv, model);
+            _satEvalExpanding.delete(_dn);
+            return _val;
+          }
+        }
+        return false;
       }
       if (node.arg.type === 'quote') {
         // True(⌜φ⌝) inherits φ's truth value
@@ -1798,97 +1865,6 @@ function satEval(node, model) {
     }
   }
   return null;
-}
-
-// Chase defref chains to ground propositional/FOL atoms.
-// Used by the certification strip so that e.g. assuming True(⌜L⌝) when L := p∨q
-// shows p and q as the variables to assign, not a defref.
-// Returns:
-//   groundAtoms  — { props, predicates, freeVars } of the resolved ground formulas
-//   evalChain    — [{defName, node}] in dependency order (deps before dependents)
-//   hasCycle     — true if a circular defref was detected (ungrounded)
-//   isTautology  — true if the original formula is necessarily true given ground atoms
-//   cyclicDefs   — Set of defined names that are part of a cycle (need T/F assignment boxes)
-function buildGroundCertData(formulaNode, proof) {
-  const groundAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set() };
-  const evalChain = [];
-  // Tracking for defrefs
-  const defInProgress = new Set();
-  const defDone = new Set();
-  const cyclicDefs = new Set(); // defined names that are part of a cycle
-  let hasCycle = false;
-
-  // Returns true if defName is (or transitively depends on) a cyclic defref.
-  function chaseDefref(defName) {
-    if (defDone.has(defName))   return cyclicDefs.has(defName);
-    if (defInProgress.has(defName)) { hasCycle = true; cyclicDefs.add(defName); return true; }
-    defInProgress.add(defName);
-    const def = namedDefinitions.find(d => d.name === defName);
-    let isCyclic = false;
-    if (def && def.formula) {
-      const defNode = parse(def.formula);
-      if (defNode) {
-        const defAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), defrefs: new Set() };
-        satCollectAtoms(defNode, defAtoms);
-        for (const dep of (defAtoms.defrefs || [])) { if (chaseDefref(dep)) isCyclic = true; }
-        if (isCyclic) {
-          cyclicDefs.add(defName);
-        } else {
-          for (const p of defAtoms.props) groundAtoms.props.add(p);
-          defAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
-          for (const v of defAtoms.freeVars) groundAtoms.freeVars.add(v);
-          evalChain.push({ defName, node: defNode });
-        }
-        defDone.add(defName);
-      } else {
-        isCyclic = true;
-        cyclicDefs.add(defName);
-        defDone.add(defName);
-      }
-    } else {
-      isCyclic = true;
-      cyclicDefs.add(defName);
-      defDone.add(defName);
-    }
-    defInProgress.delete(defName);
-    return isCyclic;
-  }
-
-  // Collect atoms directly on the formula itself (e.g. True(⌜φ⌝) with a quoted formula)
-  const topAtoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), defrefs: new Set() };
-  satCollectAtoms(formulaNode, topAtoms);
-  for (const p of topAtoms.props) groundAtoms.props.add(p);
-  topAtoms.predicates.forEach((arity, pred) => groundAtoms.predicates.set(pred, arity));
-  for (const v of topAtoms.freeVars) groundAtoms.freeVars.add(v);
-  for (const defName of (topAtoms.defrefs || [])) chaseDefref(defName);
-
-  // Tautology check (propositional only, no FOL)
-  let isTautology = false;
-  if (!hasCycle && groundAtoms.predicates.size === 0 && groundAtoms.freeVars.size === 0) {
-    const propKeys = [...groundAtoms.props];
-    const n = propKeys.length;
-    function evalWithChain(propMask) {
-      const model = { props: {}, ext: {}, vars: {}, defrefs: {}, domain: [] };
-      propKeys.forEach((k, i) => { model.props[k] = !!(propMask >> i & 1); });
-      for (const entry of evalChain) {
-        if (entry.defName !== undefined) {
-          model.defrefs[entry.defName] = satEval(entry.node, model);
-        }
-      }
-      return satEval(formulaNode, model);
-    }
-    if (n === 0) {
-      // No variables at all — evaluate directly
-      isTautology = evalWithChain(0) === true;
-    } else {
-      isTautology = true;
-      for (let mask = 0; mask < (1 << n); mask++) {
-        if (!evalWithChain(mask)) { isTautology = false; break; }
-      }
-    }
-  }
-
-  return { groundAtoms, evalChain, hasCycle, isTautology, cycleRefs: new Set(), cyclicDefs };
 }
 
 // Enumerate all 2^n propositional assignments and check tautology/sat/contradiction.
@@ -2869,6 +2845,12 @@ document.getElementById('createProofBtn').addEventListener('click', () => {
   const concStr = document.getElementById('conclusionInput').value.trim();
   if (!concStr) { alert('Please enter a conclusion.'); return; }
 
+  // Enforce definitions-first: if definitions have been added but not submitted, block proof creation
+  if (namedDefinitions.length > 0 && !defsSubmitted) {
+    alert('Please submit your variable definitions before creating a proof.');
+    return;
+  }
+
   const premises = premStr.split(/[,;]/).map(s => preprocessInput(s)).filter(Boolean);
   conclusionFormula = preprocessInput(concStr);
 
@@ -2985,12 +2967,11 @@ document.addEventListener('focusin', e => {
 
 // Use mousedown (fires before blur) to prevent the symbol button click
 // from stealing focus away from the input field.
-document.getElementById('symBar').addEventListener('mousedown', e => {
+function handleSymBarMousedown(e) {
   const btn = e.target.closest('.sym-btn');
   if (btn) e.preventDefault(); // stops the input from losing focus
-});
-
-document.getElementById('symBar').addEventListener('click', e => {
+}
+function handleSymBarClick(e) {
   const btn = e.target.closest('.sym-btn');
   if (!btn) return;
   const sym = btn.dataset.sym;
@@ -3003,7 +2984,11 @@ document.getElementById('symBar').addEventListener('click', e => {
     active.focus();
     active.dispatchEvent(new Event('input'));
   }
-});
+}
+document.getElementById('symBar').addEventListener('mousedown', handleSymBarMousedown);
+document.getElementById('symBar').addEventListener('click', handleSymBarClick);
+document.getElementById('symBar2').addEventListener('mousedown', handleSymBarMousedown);
+document.getElementById('symBar2').addEventListener('click', handleSymBarClick);
 
 // ═══════════════════════════════════════════════════════════════
 // VARIABLE DEFINITIONS PANEL
@@ -3243,8 +3228,12 @@ document.getElementById('symBar').addEventListener('click', e => {
     invalidateAssumptionCerts();
   });
 
-  // Edit button: unlock the definitions panel
+  // Edit button: unlock the definitions panel (only if no active proof)
   document.getElementById('editDefsBtn').addEventListener('click', () => {
+    if (proof.length > 0) {
+      alert('Clear the current proof before editing definitions.');
+      return;
+    }
     defsSubmitted = false;
     setDefsEditable(true);
     renderDefs();
@@ -4639,45 +4628,47 @@ function runDevSelfTests() {
     tests.push({ name: 'Def #6 (parser no-def): True(⌜L⌝) without def L is a quote not defref', ok: !!ok, details: ok ? '' : 'parsed as: ' + JSON.stringify(node) });
   }
 
-  // Test: Liar sentence — assumption True(⌜L⌝) where L := ¬True(⌜L⌝) must be unfalsifiable
-  // (self-referential cycle: True(⌜L⌝) means L is true, L is ¬True(⌜L⌝), so any consistent
-  //  assignment requires True(⌜L⌝) = NOT True(⌜L⌝), which is impossible)
+  // Test: Liar sentence — satEval returns null for True(⌜L⌝) where L := ¬True(⌜L⌝)
   {
     namedDefinitions.length = 0;
     namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
     const node = parse('True(⌜L⌝)');
-    const gcd = buildGroundCertData(node, []);
-    // The definition is self-referential → cyclic → has cycle
+    const model = { props: {}, ext: {}, vars: {}, domain: [] };
+    const result = satEval(node, model);
     tests.push({
-      name: 'Def #7 (Liar unfalsifiable): buildGroundCertData detects cycle for True(⌜L⌝) with L:=¬True(⌜L⌝)',
-      ok: gcd.hasCycle === true && gcd.cyclicDefs.has('L'),
-      details: gcd.hasCycle ? '' : 'no cycle detected'
+      name: 'Def #7 (Liar cycle): satEval returns null for True(⌜L⌝) with L:=¬True(⌜L⌝)',
+      ok: result === null,
+      details: result === null ? '' : 'expected null, got ' + result
     });
   }
 
-  // Test: Curry sentence — L := True(⌜L⌝) → ⊥
+  // Test: Curry sentence — satEval returns null for True(⌜C⌝) where C := True(⌜C⌝) → ⊥
   {
     namedDefinitions.length = 0;
     namedDefinitions.push({ name: 'C', formula: 'True(⌜C⌝) → ⊥' });
     const node = parse('True(⌜C⌝)');
-    const gcd = buildGroundCertData(node, []);
+    const model = { props: {}, ext: {}, vars: {}, domain: [] };
+    const result = satEval(node, model);
     tests.push({
-      name: 'Def #8 (Curry cycle): buildGroundCertData detects cycle for True(⌜C⌝) with C:=True(⌜C⌝)→⊥',
-      ok: gcd.hasCycle === true && gcd.cyclicDefs.has('C'),
-      details: gcd.hasCycle ? '' : 'no cycle detected'
+      name: 'Def #8 (Curry cycle): satEval returns null for True(⌜C⌝) with C:=True(⌜C⌝)→⊥',
+      ok: result === null,
+      details: result === null ? '' : 'expected null, got ' + result
     });
   }
 
-  // Test: Non-cyclic definition — L := P ∧ Q (no self-reference)
+  // Test: Non-cyclic definition — satCollectAtoms expands S := P ∧ Q to ground atoms P and Q
   {
     namedDefinitions.length = 0;
     namedDefinitions.push({ name: 'S', formula: 'P ∧ Q' });
     const node = parse('True(⌜S⌝)');
-    const gcd = buildGroundCertData(node, []);
+    const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set() };
+    satCollectAtoms(node, atoms);
+    const model = { props: { P: true, Q: true }, ext: {}, vars: {}, domain: [] };
+    const result = satEval(node, model);
     tests.push({
-      name: 'Def #9 (non-cyclic): S := P∧Q has no cycle, ground atoms include P and Q',
-      ok: !gcd.hasCycle && gcd.groundAtoms.props.has('P') && gcd.groundAtoms.props.has('Q'),
-      details: gcd.hasCycle ? 'unexpected cycle' : (gcd.groundAtoms.props.has('P') ? '' : 'missing ground atoms')
+      name: 'Def #9 (non-cyclic): S := P∧Q expands to atoms P,Q and satEval computes true',
+      ok: atoms.props.has('P') && atoms.props.has('Q') && result === true,
+      details: (!atoms.props.has('P') || !atoms.props.has('Q')) ? 'missing ground atoms' : (result !== true ? 'eval failed' : '')
     });
   }
 
@@ -4734,6 +4725,57 @@ function runDevSelfTests() {
     tests.push({ name: 'Def #13 (bare self-ref): L∧P contains bare L', ok: bare === true, details: bare ? '' : 'not detected' });
     tests.push({ name: 'Def #14 (bare self-ref): True(⌜L⌝) does NOT contain bare L', ok: notBare === false, details: notBare ? 'false positive' : '' });
     tests.push({ name: 'Def #15 (bare self-ref): ¬True(⌜L⌝) does NOT contain bare L', ok: notBare2 === false, details: notBare2 ? 'false positive' : '' });
+  }
+
+  // Test: satCollectAtoms detects cycle and tracks cyclic def names
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const _ds = defsSubmitted; defsSubmitted = true;
+    const node = parse('L');
+    defsSubmitted = _ds;
+    const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set() };
+    satCollectAtoms(node, atoms);
+    tests.push({
+      name: 'Def #15b (cert cycle): expanded L := ¬True(⌜L⌝) has hasCycle and cyclicDefs includes L',
+      ok: atoms.hasCycle === true && atoms.cyclicDefs && atoms.cyclicDefs.has('L'),
+      details: !atoms.hasCycle ? 'no cycle detected' : (!atoms.cyclicDefs || !atoms.cyclicDefs.has('L')) ? 'L not in cyclicDefs' : ''
+    });
+  }
+
+  // Test: satEval with defValues uses assigned value for cyclic defref instead of null
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const node = parse('True(⌜L⌝)');
+    const modelT = { props: {}, ext: {}, vars: {}, domain: [], defValues: { L: true } };
+    const modelF = { props: {}, ext: {}, vars: {}, domain: [], defValues: { L: false } };
+    const valT = satEval(node, modelT);
+    const valF = satEval(node, modelF);
+    tests.push({
+      name: 'Def #15c (defValues): satEval uses defValues for cyclic defrefs (T→T, F→F)',
+      ok: valT === true && valF === false,
+      details: 'True(⌜L⌝) with L=T: ' + valT + ', with L=F: ' + valF
+    });
+  }
+
+  // Test: T-schema inconsistency — assigning L=F makes ¬True(⌜L⌝) evaluate to T, contradicting L=F
+  {
+    namedDefinitions.length = 0;
+    namedDefinitions.push({ name: 'L', formula: '¬True(⌜L⌝)' });
+    const _ds = defsSubmitted; defsSubmitted = true;
+    const node = parse('L'); // expands to ¬True(⌜L⌝)
+    defsSubmitted = _ds;
+    const model = { props: {}, ext: {}, vars: {}, domain: [], defValues: { L: false } };
+    const formulaVal = satEval(node, model);
+    const defNode = parse('¬True(⌜L⌝)');
+    const defVal = satEval(defNode, model);
+    // L=F → True(⌜L⌝)=F → ¬True(⌜L⌝)=T → formula=T, and defVal=T≠F=assigned
+    tests.push({
+      name: 'Def #15d (T-schema inconsistency): L=F makes definition eval to T — inconsistent',
+      ok: formulaVal === true && defVal === true && defVal !== false,
+      details: 'formula=' + formulaVal + ', defVal=' + defVal
+    });
   }
 
   // Test: TI works with expanded name — user writes defined name as formula, then TI
@@ -4859,8 +4901,8 @@ function formatFalsifyingModel(model) {
 // openCertifyIdx holds the proof index whose inline strip is currently open (or null).
 let openCertifyIdx = null;
 
-// Called when the student blurs an assumption input that has a formula.
-// Validates WFF + detects propositional tautologies; sets proof row state; re-renders.
+// Called when the student clicks 🔒 on an assumption.
+// Collects base-case atoms, sets proof row state, re-renders to show certification strip.
 function triggerAssumptionCertification(idx) {
   const f = proof[idx].formula;
   if (!f) return;
@@ -4882,44 +4924,21 @@ function triggerAssumptionCertification(idx) {
     return;
   }
   proof[idx]._certifiedByPriorLine = false;
-  const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set(), defrefs: new Set() };
+  const atoms = { props: new Set(), predicates: new Map(), freeVars: new Set() };
   satCollectAtoms(node, atoms);
 
-  // If the formula contains defrefs, chase them to ground atoms
-  // so the certification strip shows the ground propositional variables instead.
-  let certAtoms = atoms;
-  let certEvalChain = null;
-  let certHasCycle = false;
-  let certIsTautology = false;
-  let certCycleRefs = new Set();
-  let certCyclicDefs = new Set();
-  if (atoms.defrefs && atoms.defrefs.size > 0) {
-    const gcd = buildGroundCertData(node, proof);
-    certAtoms = gcd.groundAtoms;
-    certEvalChain = gcd.evalChain;
-    certHasCycle = gcd.hasCycle;
-    certIsTautology = gcd.isTautology;
-    certCycleRefs = gcd.cycleRefs;
-    certCyclicDefs = gcd.cyclicDefs || new Set();
-  }
-
-  const isFOL = certAtoms.predicates.size > 0 || containsQuantifier(node) || certAtoms.freeVars.size > 0;
-  // hasNoVars is only true if there are genuinely no variables AND no unresolved cyclic defrefs
-  const hasNoVars = certAtoms.props.size === 0 && certAtoms.predicates.size === 0 &&
-                    certAtoms.freeVars.size === 0
-                    && certCycleRefs.size === 0 && certCyclicDefs.size === 0;
+  const isFOL = atoms.predicates.size > 0 || containsQuantifier(node) || atoms.freeVars.size > 0;
+  const cyclicDefs = atoms.cyclicDefs || new Set();
+  const hasNoVars = atoms.props.size === 0 && atoms.predicates.size === 0 && atoms.freeVars.size === 0 && cyclicDefs.size === 0;
 
   proof[idx].falsifiabilityVerified = false;
   proof[idx].falsifiabilityError =
     'Hold up! In the Bryan Deduction system, you can only assume falsifiable statements — use the 🔒 button to certify this assumption.';
-  proof[idx]._certAtoms = certAtoms;
+  proof[idx]._certAtoms = atoms;
+  proof[idx]._certHasCycle = !!atoms.hasCycle;
+  proof[idx]._certCyclicDefs = cyclicDefs;
   proof[idx]._certIsFOL = isFOL;
   proof[idx]._certNoVars = hasNoVars;
-  proof[idx]._certEvalChain = certEvalChain;
-  proof[idx]._certHasCycle = certHasCycle;
-  proof[idx]._certIsTautology = certIsTautology;
-  proof[idx]._certCycleRefs = certCycleRefs;
-  proof[idx]._certCyclicDefs = certCyclicDefs;
   openCertifyIdx = idx;
   render();
 }
@@ -4929,10 +4948,9 @@ function buildCertifyRow(idx, colSpan) {
   const row = proof[idx];
   const node = parse(row.formula);
   const atoms = row._certAtoms || { props: new Set(), predicates: new Map(), freeVars: new Set() };
-  const isFOL = row._certIsFOL || false;
-  const cycleRefs = row._certCycleRefs || new Set();
   const cyclicDefs = row._certCyclicDefs || new Set();
-  const formula = row.formula;  // show exactly what the student typed
+  const isFOL = row._certIsFOL || false;
+  const formula = row.formula;
 
   const tr = document.createElement('tr');
   tr.className = 'certify-inline-tr';
@@ -4943,22 +4961,18 @@ function buildCertifyRow(idx, colSpan) {
   const hdr = document.createElement('div');
   hdr.className = 'certify-inline-header';
   hdr.innerHTML = 'To use <span class="certify-formula">' + escapeHtml(formula) +
-    '</span> as an assumption in the Bryan Deduction system, you must provide an interpretation under which it is <strong>FALSE</strong>:';
+    '</span> as an assumption, assign truth values to its base-case components so that it evaluates to <strong>FALSE</strong>:';
   td.appendChild(hdr);
 
-  // Amber tautology warning: the assumption can never be made false
-  if (row._certIsTautology) {
-    const warn = document.createElement('div');
-    warn.style.cssText = 'color:#92610a;background:#fff8e1;border:1px solid #f0c040;border-radius:4px;font-size:.82rem;padding:5px 8px;margin-top:6px';
-    warn.textContent = '⚠ The referenced formula is a tautology — no assignment can make this assumption false.';
-    td.appendChild(warn);
-  }
-
-  // If there are no assignable variables, show a note and return early
+  // If there are no assignable variables, show a note
   if (row._certNoVars) {
     const noVarMsg = document.createElement('div');
     noVarMsg.style.cssText = 'color:var(--red);font-size:.85rem;font-family:var(--mono);margin-top:8px;font-style:italic';
-    noVarMsg.textContent = 'No open variables to assign';
+    if (row._certHasCycle) {
+      noVarMsg.textContent = 'This formula involves a self-referential definition whose truth value cannot be consistently assigned — it cannot be falsified.';
+    } else {
+      noVarMsg.textContent = 'No base-case variables to assign — this formula cannot be falsified.';
+    }
     td.appendChild(noVarMsg);
     tr.appendChild(td);
     return tr;
@@ -4968,6 +4982,7 @@ function buildCertifyRow(idx, colSpan) {
   const fieldsDiv = document.createElement('div');
   fieldsDiv.className = 'certify-inline-fields';
 
+  // FOL: domain input
   if (isFOL) {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.85rem';
@@ -4979,23 +4994,17 @@ function buildCertifyRow(idx, colSpan) {
     fieldsDiv.appendChild(wrap);
   }
 
-
-  // Cyclic defref fields: T/F dropdowns for ungrounded self-referential defrefs
-  const cyclicDefList = [...cyclicDefs].sort();
-  cyclicDefList.forEach(defName => {
+  // ⊥ forced false (display only, no input)
+  if (node && containsBot(node)) {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
-    const lbl = document.createElement('label');
-    lbl.style.fontFamily = 'var(--mono)';
-    lbl.textContent = defName + ':';
-    const sel = document.createElement('select');
-    sel.id = 'certify-defref-' + idx + '-' + defName;
-    sel.style.cssText = 'font-size:.85rem;padding:2px 4px';
-    ['T','F'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
-    wrap.appendChild(lbl); wrap.appendChild(sel);
+    const lbl = document.createElement('label'); lbl.style.fontFamily = 'var(--mono)'; lbl.textContent = '⊥: F';
+    lbl.style.color = '#888';
+    wrap.appendChild(lbl);
     fieldsDiv.appendChild(wrap);
-  });
+  }
 
+  // Propositional variables
   const propList = [...atoms.props].sort();
   propList.forEach(name => {
     const wrap = document.createElement('div');
@@ -5008,6 +5017,25 @@ function buildCertifyRow(idx, colSpan) {
     fieldsDiv.appendChild(wrap);
   });
 
+  // Cyclic defined names — shown as T/F selectors so user can explore the contradiction
+  const cyclicList = [...cyclicDefs].sort();
+  cyclicList.forEach(name => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
+    const lbl = document.createElement('label'); lbl.style.fontFamily = 'var(--mono)'; lbl.style.color = 'var(--orange, #c77)'; lbl.textContent = name + ':';
+    const sel = document.createElement('select'); sel.id = 'certify-def-' + idx + '-' + name;
+    sel.style.cssText = 'font-size:.85rem;padding:2px 4px';
+    ['T','F'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    wrap.appendChild(lbl); wrap.appendChild(sel);
+    const hint = document.createElement('span');
+    hint.style.cssText = 'font-size:.75rem;color:#999;font-style:italic';
+    const defn = namedDefinitions.find(d => d.name === name);
+    hint.textContent = defn ? '(' + name + ' := ' + defn.formula + ')' : '';
+    wrap.appendChild(hint);
+    fieldsDiv.appendChild(wrap);
+  });
+
+  // Predicate extensions
   atoms.predicates.forEach((arity, pred) => {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:.85rem';
@@ -5021,6 +5049,7 @@ function buildCertifyRow(idx, colSpan) {
     fieldsDiv.appendChild(wrap);
   });
 
+  // Free variable assignments
   const freeList = [...atoms.freeVars].sort();
   freeList.forEach(v => {
     const wrap = document.createElement('div');
@@ -5086,45 +5115,43 @@ function buildCertifyRow(idx, colSpan) {
 
     if (!node) { resultSpan.textContent = 'Invalid formula.'; resultSpan.className = 'certify-result err'; return; }
 
-
-    // Populate cyclic defrefs from user's T/F assignments
-    model.defrefs = {};
-    cyclicDefList.forEach(defName => {
-      const sel = document.getElementById('certify-defref-' + idx + '-' + defName);
-      model.defrefs[defName] = sel ? sel.value === 'T' : false;
+    // Collect defValues from cyclic def selectors
+    const defValues = {};
+    cyclicList.forEach(name => {
+      const sel = document.getElementById('certify-def-' + idx + '-' + name);
+      defValues[name] = sel ? sel.value === 'T' : false;
     });
-
-    // Resolve grounded defref chain
-    if (row._certEvalChain) {
-      for (const entry of row._certEvalChain) {
-        if (entry.defName !== undefined) {
-          model.defrefs[entry.defName] = satEval(entry.node, model);
-        }
-      }
-    }
-
-
-    // Consistency check for cyclic defrefs: the definition's formula must evaluate
-    // to the same truth value the user assigned to the name.
-    for (const defName of cyclicDefList) {
-      const def = namedDefinitions.find(d => d.name === defName);
-      if (def && def.formula) {
-        const defNode = parse(def.formula);
-        if (defNode) {
-          const defVal = satEval(defNode, model);
-          if (defVal !== model.defrefs[defName]) {
-            const deemed = model.defrefs[defName] ? 'true' : 'false';
-            const implied = model.defrefs[defName] ? 'false' : 'true';
-            resultSpan.textContent = '✗ Inconsistent interpretation: deeming ' + defName + ' ' + deemed + ' implies that you also deem ' + defName + ' to be ' + implied + '.';
-            resultSpan.className = 'certify-result err';
-            return;
-          }
-        }
-      }
-    }
+    if (cyclicList.length > 0) model.defValues = defValues;
 
     const val = satEval(node, model);
-    if (val === null) { resultSpan.textContent = 'Could not evaluate — check inputs.'; resultSpan.className = 'certify-result err'; return; }
+    if (val === null) {
+      resultSpan.textContent = '✗ Could not evaluate — this may involve a self-referential definition with no consistent truth value.';
+      resultSpan.className = 'certify-result err';
+      return;
+    }
+
+    // T-schema consistency check for cyclic definitions
+    if (cyclicList.length > 0) {
+      for (const dn of cyclicList) {
+        const defn = namedDefinitions.find(d => d.name === dn);
+        if (!defn || !defn.formula) continue;
+        const defNode = parse(defn.formula);
+        if (!defNode) continue;
+        const defVal = satEval(defNode, model);
+        const assigned = defValues[dn];
+        if (defVal !== assigned) {
+          resultSpan.innerHTML = '✗ <strong>Inconsistent assignment.</strong> You assigned <code>' +
+            escapeHtml(dn) + ' = ' + (assigned ? 'T' : 'F') +
+            '</code>, but by truth introduction and elimination, val(' + escapeHtml(dn) +
+            ') must equal val(' + escapeHtml(defn.formula) + '), which evaluates to <code>' +
+            (defVal === true ? 'T' : defVal === false ? 'F' : '?') +
+            '</code> under this assignment.';
+          resultSpan.className = 'certify-result err';
+          return;
+        }
+      }
+    }
+
     if (val === false) {
       proof[idx].falsifiabilityVerified = true;
       proof[idx].falsifiabilityError = null;
@@ -5132,7 +5159,7 @@ function buildCertifyRow(idx, colSpan) {
       openCertifyIdx = null;
       render();
     } else {
-      resultSpan.textContent = '✗ Your interpretation is not false — try a different one.';
+      resultSpan.textContent = '✗ Under this assignment the formula evaluates to TRUE — try different values.';
       resultSpan.className = 'certify-result err';
     }
   });
