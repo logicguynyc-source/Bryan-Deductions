@@ -829,7 +829,7 @@ header span {
   <p><strong>Proof rules:</strong></p>
   <ul>
     <li>There are inference rules for truth introduction and truth elimination: from any formula φ on an accessible prior line, you can derive <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>; and from any <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code> on an accessible prior line, you can derive φ.</li>
-    <li>Any subproof assumption must be either previously derived (i.e., established on an accessible prior line) or consistently falsifiable. A formula φ is consistently falsifiable iff (1) there exists an assignment under which val(φ) = F and (2) for every propositional variable χ in the scope of that assignment, val(χ) = val(True(⌜χ⌝)). (1) is the falsifiability constraint; (2) is the consistency constraint.</li>
+    <li>Any subproof assumption must be either previously derived (i.e., established on an accessible prior line) or consistently falsifiable. A formula φ is consistently falsifiable iff (1) there exists an assignment under which val(φ) = F and (2) for every propositional variable χ in the scope of that assignment, val(χ) = val(True(⌜χ⌝)). (1) is the falsifiability constraint; (2) is the consistency constraint. This restriction is what allows Bryan Deduction to formalize inference for the target language without trivializing it.</li>
   </ul>
 </div>
 
