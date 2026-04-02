@@ -819,13 +819,13 @@ header span {
   <span>Bryan-Style Proof Editor</span>
 </header>
 <div class="intro-blurb">
-  Bryan Deduction is a Fitch-style natural deduction system extended with a truth predicate. It uses a quotational syntax with no restrictions on formula content. Key differences from standard systems:
+  Bryan Deduction is a Fitch-style natural deduction system. It formalizes inference in a first-order language extended with a truth predicate. Key differences from standard natural deduction:
   <ul>
-    <li>From any accessible formula φ, you can derive <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>. And from any accessible <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>, you can derive φ.</li>
-    <li>Variable definitions assign a fixed formula to a variable. For example, <code>Def L := ¬True(⌜L⌝)</code> assigns the formula <code>¬True(⌜L⌝)</code> to the variable L. Wherever L appears in the proof thereafter, it is a shorthand for the formula <code>¬True(⌜L⌝)</code>. <code>⌜L⌝</code> is the name of the formula; TI/TE work with defined names the same way they work with quoted formulas.</li>
-    <li>Subderivations can explore what follows from assuming <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code> or <code>¬True(⌜<span style="font-family:inherit">φ</span>⌝)</code> for any defined variable, as long as this assumption is either (a) previously derived or (b) falsifiable.</li>
+    <li>There are inference rules for truth introduction and truth elimination: from any accessible formula φ, you can derive <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>, and from any accessible <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>, you can derive φ.</li>
+    <li>Variable stipulations bind a propositional variable's truth conditions to those of a formula. For example, <code>Let P := Q∨R</code> stipulates that val(P) = val(Q∨R) in any admissible valuation. <code>⌜L⌝</code> is the name of the variable L; TI/TE work with stipulated names the same way they work with quoted formulas.</li>
+    <li>Any subproof assumption must be either (a) previously derived or (b) falsifiable.</li>
   </ul>
-  <p class="intro-key">The key innovation: assumptions must be either <em>previously derived</em> (the formula already appears on an accessible prior line) or <em>falsifiable</em> (there exists a coherent assignment of truth values under which the assumption is false). For ordinary formulas, falsifiability just means the formula isn't a tautology. For self-referential formulas like <code>True(⌜L⌝)</code> where <code>Def L := ¬True(⌜L⌝)</code>, it means the assignment of truth values must be internally consistent and must make the assumption false. These constraints are designed to prevent liar sentences, Curry sentences, and similar self-referential tricks from being used to derive a contradiction from the inference rules alone — while still allowing tautologies to be re-assumed once they have been established.</p>
+  <p class="intro-key">Any assignment used to certify falsifiability is subject to the following consistency constraint: for every propositional variable φ that is in the scope of the assignment, val(φ) = val(True(⌜φ⌝)), where val(·) maps each formula to its truth value under the assignment. These constraints are designed to prevent liar sentences, Curry sentences, and similar self-referential formulas from generating contradictions via the inference rules alone. The "previously derived" path handles the complementary case: any formula already established on an accessible prior line may be freely re-assumed, including tautologies once they have been derived.</p>
 </div>
 
 <!-- SYMBOL BAR -->
@@ -848,22 +848,22 @@ header span {
   <!-- LEFT: PROOF AREA -->
   <div>
 
-    <!-- Variable Definitions -->
+    <!-- Variable Stipulations -->
     <div class="panel" id="defsPanel" style="margin-bottom:18px;">
       <div class="panel-header" id="defsPanelHeader">
-        <span>Variable Definitions</span>
+        <span>Variable Stipulations</span>
         <span class="defs-toggle" id="defsToggleIcon">▼</span>
       </div>
       <div class="panel-body" id="defsBody">
         <div id="defsList"></div>
-        <button class="def-add-btn" id="addDefBtn">+ Add Definition</button>
+        <button class="def-add-btn" id="addDefBtn">+ Add Stipulation</button>
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px;">
-          <button class="def-submit-btn" id="submitDefsBtn">Submit Defined Terms</button>
-          <button class="def-edit-btn" id="editDefsBtn" style="display:none;">Edit Definitions</button>
+          <button class="def-submit-btn" id="submitDefsBtn">Submit Stipulations</button>
+          <button class="def-edit-btn" id="editDefsBtn" style="display:none;">Edit Stipulations</button>
         </div>
         <div id="defsValidationMsg" style="display:none;margin-top:6px;font-size:.82rem;color:#9b1c1c;"></div>
         <div class="def-note">
-          Here, you can assign a fixed formula to any variable that you'd like to fix. Example: <code>Def L := ¬True(⌜L⌝)</code>
+          Here, you can stipulate the truth conditions of any propositional variable. Example: <code>Let P := Q∨R</code>
         </div>
       </div>
     </div>
@@ -1004,7 +1004,7 @@ header span {
     <div class="panel">
       <div class="panel-header"><span>How to Use</span></div>
       <div class="instructions">
-        <p style="margin-bottom:8px;"><strong>1. Variable definitions (optional)</strong> — Use the <em>Variable Definitions</em> panel to assign a fixed formula to a variable (e.g. <code>Def L := ¬True(⌜L⌝)</code>). Submit definitions before setting up your problem. If you don't need definitions, skip this step.</p>
+        <p style="margin-bottom:8px;"><strong>1. Variable stipulations (optional)</strong> — Use the <em>Variable Stipulations</em> panel to stipulate the truth conditions of a propositional variable (e.g. <code>Let P := Q∨R</code> or <code>Let L := ¬True(⌜L⌝)</code>). Submit stipulations before setting up your problem. If you don't need stipulations, skip this step.</p>
         <p style="margin-bottom:8px;"><strong>2. Set up</strong> — Enter comma-separated premises and a conclusion, then click <em>Create Proof</em>.</p>
         <p style="margin-bottom:8px;"><strong>3. Type formulas</strong> — Each row has a formula cell (left) and a justification cell (right). Click either to edit.</p>
         <p style="margin-bottom:8px;"><strong>4. Justifications</strong> — Type the rule abbreviation and line numbers, e.g. <code>∧I 1,2</code> or <code>→E 3,4</code>. Premises are labelled automatically.</p>
@@ -1119,12 +1119,12 @@ header span {
             <tr>
               <td>TI (def name)</td>
               <td><code>TI m</code></td>
-              <td class="fol-note-cell">Def L := ¬True(⌜L⌝)<br>Line 1: <code>¬True(⌜L⌝)</code><br>Line 2: <code>True(⌜L⌝)</code> &mdash; <code>TI 1</code><br><span style="font-size:.75rem">Cited line must contain the formula that the name is defined as.</span></td>
+              <td class="fol-note-cell">Let L := ¬True(⌜L⌝)<br>Line 1: <code>¬True(⌜L⌝)</code><br>Line 2: <code>True(⌜L⌝)</code> &mdash; <code>TI 1</code><br><span style="font-size:.75rem">Cited line must contain the formula that the name is stipulated as.</span></td>
             </tr>
             <tr>
               <td>TE (def name)</td>
               <td><code>TE m</code></td>
-              <td class="fol-note-cell">Def L := ¬True(⌜L⌝)<br>Line 3: <code>True(⌜L⌝)</code><br>Line 4: <code>¬True(⌜L⌝)</code> &mdash; <code>TE 3</code><br><span style="font-size:.75rem">Derives the definition formula that the name denotes.</span></td>
+              <td class="fol-note-cell">Let L := ¬True(⌜L⌝)<br>Line 3: <code>True(⌜L⌝)</code><br>Line 4: <code>¬True(⌜L⌝)</code> &mdash; <code>TE 3</code><br><span style="font-size:.75rem">Derives the stipulated formula that the name denotes.</span></td>
             </tr>
           </table>
         </div>
@@ -1296,8 +1296,8 @@ const RULES = [
   // ── Truth Theory ──
   { key: 'TI',  name: 'Truth Intro',             abbr: 'TI',  form: 'φ (m) → True(⌜φ⌝)',   desc: 'From φ on line m, derive True(⌜φ⌝). φ can be a spelled-out formula or a defined variable. Write: TI m.', lines: 1, isTruth: true },
   { key: 'TE',  name: 'Truth Elim',              abbr: 'TE',  form: 'True(⌜φ⌝) (m) → φ', desc: 'From True(⌜φ⌝) on line m, derive φ. φ can be a spelled-out formula or a defined variable. Write: TE m.', lines: 1, isTruth: true },
-  // ── Definitions ──
-  { key: 'Def', name: 'Definition',              abbr: 'Def', form: 'φ (m) → ψ, where φ and ψ are equal by definition', desc: 'If line m contains a defined variable φ, derive its definiens (the formula assigned to φ). Conversely, if line m contains the definiens, derive φ. In both directions, this simply unpacks or repacks a variable definition. Write: Def m.', lines: 1, isDef: true },
+  // ── Stipulations ──
+  { key: 'Let', name: 'Stipulation',             abbr: 'Let', form: 'φ (m) → ψ, where φ and ψ are related by stipulation', desc: 'If line m contains a stipulated variable φ, derive the formula whose truth conditions were stipulated for φ. Conversely, if line m contains that formula, derive φ. Write: Let m.', lines: 1, isDef: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -2314,8 +2314,8 @@ function checkLine(proof, idx) {
       return { ok: true };
     }
 
-    case 'DEF': {
-      if (lines.length < 1) return { ok: false, msg: 'Def needs 1 line reference (e.g. Def 3)' };
+    case 'LET': {
+      if (lines.length < 1) return { ok: false, msg: 'Let needs 1 line reference (e.g. Let 3)' };
       const defRefF = normalizeFormula(L(lines[0]) || '');
       const defRefP = P(lines[0]);
       if (!formulasEqual(p ?? f, defRefP ?? defRefF)) return { ok: false, msg: `Definition does not match: line ${lines[0]+1} is "${defRefF}", current line is "${f}"` };
@@ -3033,7 +3033,7 @@ document.getElementById('symBar2').addEventListener('click', handleSymBarClick);
       entry.className = 'def-entry';
       const lbl = document.createElement('span');
       lbl.className = 'def-label';
-      lbl.textContent = 'Def ';
+      lbl.textContent = 'Let ';
       const name = document.createElement('strong');
       name.textContent = def.name;
       const assign = document.createElement('span');
@@ -3057,7 +3057,7 @@ document.getElementById('symBar2').addEventListener('click', handleSymBarClick);
       row.className = 'def-row';
       const nameLbl = document.createElement('span');
       nameLbl.style.cssText = 'font-family:var(--mono);font-size:.82rem;color:var(--muted);flex-shrink:0';
-      nameLbl.textContent = 'Def';
+      nameLbl.textContent = 'Let';
       const nameInp = document.createElement('input');
       nameInp.type = 'text';
       nameInp.className = 'def-name';
@@ -3292,7 +3292,7 @@ RULES.forEach(rule => {
   if (rule.isDef && !defHeaderAdded) {
     const divider4 = document.createElement('div');
     divider4.className = 'rule-section-divider';
-    divider4.textContent = 'Variable Definitions';
+    divider4.textContent = 'Variable Stipulations';
     rulesList.appendChild(divider4);
     defHeaderAdded = true;
   }
@@ -4817,29 +4817,29 @@ function runDevSelfTests() {
     namedDefinitions.push({ name: 'A', formula: 'P∨Q' });
     defsSubmitted = true;
     try {
-      // Def unfold: A on line 1, derive P∨Q via Def 1
+      // Let unfold: A on line 1, derive P∨Q via Let 1
       const proof1 = [
         { type: 'premise', formula: 'A',   justification: 'Pr',    depth: 0 },
-        { type: 'step',    formula: 'P∨Q', justification: 'Def 1', depth: 0 },
+        { type: 'step',    formula: 'P∨Q', justification: 'Let 1', depth: 0 },
       ];
       const r1 = checkLine(proof1, 1);
-      tests.push({ name: 'Def #18 (Def unfold): P∨Q from A where Def A := P∨Q', ok: r1.ok === true, details: r1.ok ? '' : r1.msg });
+      tests.push({ name: 'Let #18 (Let unfold): P∨Q from A where Let A := P∨Q', ok: r1.ok === true, details: r1.ok ? '' : r1.msg });
 
-      // Def fold: P∨Q on line 1, derive A via Def 1
+      // Let fold: P∨Q on line 1, derive A via Let 1
       const proof2 = [
         { type: 'premise', formula: 'P∨Q', justification: 'Pr',    depth: 0 },
-        { type: 'step',    formula: 'A',   justification: 'Def 1', depth: 0 },
+        { type: 'step',    formula: 'A',   justification: 'Let 1', depth: 0 },
       ];
       const r2 = checkLine(proof2, 1);
-      tests.push({ name: 'Def #19 (Def fold): A from P∨Q where Def A := P∨Q', ok: r2.ok === true, details: r2.ok ? '' : r2.msg });
+      tests.push({ name: 'Let #19 (Let fold): A from P∨Q where Let A := P∨Q', ok: r2.ok === true, details: r2.ok ? '' : r2.msg });
 
-      // Def mismatch: should fail when formulas don't match by definition
+      // Let mismatch: should fail when formulas don't match by stipulation
       const proof3 = [
         { type: 'premise', formula: 'A',   justification: 'Pr',    depth: 0 },
-        { type: 'step',    formula: 'P∧Q', justification: 'Def 1', depth: 0 },
+        { type: 'step',    formula: 'P∧Q', justification: 'Let 1', depth: 0 },
       ];
       const r3 = checkLine(proof3, 1);
-      tests.push({ name: 'Def #20 (Def mismatch): P∧Q should not follow from A where Def A := P∨Q', ok: r3.ok === false, details: r3.ok ? 'checker incorrectly accepted' : '' });
+      tests.push({ name: 'Let #20 (Let mismatch): P∧Q should not follow from A where Let A := P∨Q', ok: r3.ok === false, details: r3.ok ? 'checker incorrectly accepted' : '' });
     } finally { defsSubmitted = savedSubmitted; }
   }
 
