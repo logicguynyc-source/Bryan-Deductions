@@ -823,10 +823,9 @@ header span {
   <ul>
     <li>There is a corner-quote notation, ⌜·⌝. For any well-formed formula φ, ⌜φ⌝ is the name of that formula.</li>
     <li>There are inference rules for truth introduction and truth elimination: from any formula φ on an accessible prior line, you can derive <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>; and from any <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code> on an accessible prior line, you can derive φ.</li>
-    <li>Variable stipulations bind a propositional variable's truth conditions to those of a formula. For example, <code>Let P := Q∨R</code> stipulates that val(P) = val(Q∨R) in any admissible valuation. Importantly, the stipulation does not collapse P and Q∨R into a single formula — both remain independent well-formed formulas, each quotable via ⌜·⌝.</li>
-    <li>Any subproof assumption must be either (a) previously derived or (b) falsifiable.</li>
+    <li>Variable stipulations bind a propositional variable's truth conditions to those of a formula. For example, <code>Let P := Q∨R</code> stipulates that val(P) = val(Q∨R) in any admissible valuation, where val(·) maps each formula to its truth value. Importantly, the stipulation does not collapse P and Q∨R into a single formula — both remain independent well-formed formulas, each quotable via ⌜·⌝.</li>
+    <li>Any subproof assumption must be either previously derived (i.e., established on an accessible prior line) or consistently falsifiable. A formula φ is consistently falsifiable iff (1) there exists an assignment under which val(φ) = F and (2) for every propositional variable χ in the scope of that assignment, val(χ) = val(True(⌜χ⌝)). (1) is the falsifiability constraint; (2) is the consistency constraint.</li>
   </ul>
-  <p class="intro-key">Any assignment used to certify falsifiability is subject to the following consistency constraint: for every propositional variable φ that is in the scope of the assignment, val(φ) = val(True(⌜φ⌝)), where val(·) maps each formula to its truth value under the assignment. These constraints are designed to prevent liar sentences, Curry sentences, and similar self-referential formulas from generating contradictions via the inference rules alone. The "previously derived" path handles the complementary case: any formula already established on an accessible prior line may be freely re-assumed, including tautologies once they have been derived.</p>
 </div>
 
 <!-- SYMBOL BAR -->
