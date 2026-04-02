@@ -821,7 +821,7 @@ header span {
 <div class="intro-blurb">
   Bryan Deduction is a Fitch-style natural deduction system. It formalizes inference in a first-order language extended with a truth predicate. It is a classical system in its logical rules: it retains all the standard introduction and elimination rules for the connectives. However, it distinguishes itself from other classical systems in the following four ways:
   <ul>
-    <li>The corner-quote notation <code>⌜φ⌝</code> is a name for the formula φ. Any well-formed formula can be quoted.</li>
+    <li>There is a corner-quote notation, ⌜·⌝. For any well-formed formula φ, ⌜φ⌝ is the name of that formula.</li>
     <li>There are inference rules for truth introduction and truth elimination: from any formula φ on an accessible prior line, you can derive <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code>; and from any <code>True(⌜<span style="font-family:inherit">φ</span>⌝)</code> on an accessible prior line, you can derive φ.</li>
     <li>Variable stipulations bind a propositional variable's truth conditions to those of a formula. For example, <code>Let P := Q∨R</code> stipulates that val(P) = val(Q∨R) in any admissible valuation. Importantly, the stipulation does not collapse P and Q∨R into a single formula — both remain independent well-formed formulas, each quotable via ⌜·⌝.</li>
     <li>Any subproof assumption must be either (a) previously derived or (b) falsifiable.</li>
