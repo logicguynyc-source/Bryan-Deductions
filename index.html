@@ -5145,12 +5145,14 @@ function buildCertifyRow(idx, colSpan) {
         const defVal = satEval(defNode, model);
         const assigned = defValues[dn];
         if (defVal !== assigned) {
-          resultSpan.innerHTML = '✗ <strong>Inconsistent assignment.</strong> You assigned <code>' +
-            escapeHtml(dn) + ' = ' + (assigned ? 'T' : 'F') +
-            '</code>, but by truth introduction and elimination, val(' + escapeHtml(dn) +
-            ') must equal val(' + escapeHtml(defn.formula) + '), which evaluates to <code>' +
+          resultSpan.innerHTML = '✗ <strong>Inconsistent assignment.</strong> You assigned val(<code>' +
+            escapeHtml(dn) + '</code>) = ' + (assigned ? 'T' : 'F') +
+            ', but the consistency constraint requires val(<code>' + escapeHtml(dn) +
+            '</code>) = val(<code>True(⌜' + escapeHtml(dn) + '⌝)</code>). Since <code>' +
+            escapeHtml(dn) + ' := ' + escapeHtml(defn.formula) +
+            '</code>, val(<code>True(⌜' + escapeHtml(dn) + '⌝)</code>) = ' +
             (defVal === true ? 'T' : defVal === false ? 'F' : '?') +
-            '</code> under this assignment.';
+            ' under this assignment. The assignment therefore violates the consistency constraint.';
           resultSpan.className = 'certify-result err';
           return;
         }
